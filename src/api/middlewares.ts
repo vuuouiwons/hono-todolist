@@ -1,0 +1,127 @@
+import { OpenAPIHono, type z } from '@hono/zod-openapi';
+import type { ErrorHandler, NotFoundHandler } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
+import type { RequestIdVariables } from 'hono/request-id';
+import type { TimingVariables } from 'hono/timing';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { ZodError } from 'zod';
+import { AppError, UnauthorizedError } from '../application/errors.js';
+import type { TokenService, Transactor, Tx } from '../application/ports.js';
+import { runWithTx } from '../application/transactional.js';
+import { formatZodIssues } from '../application/validation.js';
+import type { BulkDeleteRequestDTO } from './dtos.js';
+
+export type AppVariables = RequestIdVariables &
+  TimingVariables & {
+    userId: number;
+    userEmail: string;
+    tx?: Tx;
+  };
+
+export type AppEnv = {
+  Variables: AppVariables;
+};
+
+export function createOpenAPIRouter() {
+  return new OpenAPIHono<AppEnv>({
+    defaultHook: (result, c) => {
+      if (!result.success) {
+        return c.json({ error: formatZodIssues(result.error) }, 400);
+      }
+    },
+  });
+}
+
+export function extractBulkDeleteIds(body: z.infer<typeof BulkDeleteRequestDTO>): number[] {
+  if (Array.isArray(body)) {
+    return body;
+  }
+  if ('id' in body) {
+    return [body.id];
+  }
+  return body.ids;
+}
+
+const MUTATING_HTTP_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+
+class TransactionRollbackSignal extends Error {
+  constructor() {
+    super('Transaction rolled back due to error HTTP response');
+  }
+}
+
+/**
+ * Hono transaction middleware (analogous to NestJS `@Transactional()`):
+ * opens a request-scoped transaction via `AsyncLocalStorage` for mutating
+ * HTTP requests, sets `c.set('tx', tx)`, commits on success, and rolls back
+ * if an unhandled error occurs or Hono produces an error response (`>= 400`).
+ */
+export function createTransactionMiddleware(transactor: Transactor) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    if (!MUTATING_HTTP_METHODS.has(c.req.method)) {
+      await next();
+      return;
+    }
+
+    try {
+      await runWithTx(transactor, async (tx) => {
+        c.set('tx', tx);
+        await next();
+        if (c.error || c.res.status >= 400) {
+          throw new TransactionRollbackSignal();
+        }
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackSignal)) {
+        throw error;
+      }
+    }
+  });
+}
+
+export function createAuthMiddleware(tokenService: TokenService) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader) {
+      throw new UnauthorizedError('Missing Authorization header');
+    }
+
+    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+    if (!match || !match[1]) {
+      throw new UnauthorizedError('Authorization header must use Bearer token scheme');
+    }
+
+    const payload = await tokenService.verify(match[1]);
+    c.set('userId', payload.sub);
+    c.set('userEmail', payload.email);
+
+    await next();
+  });
+}
+
+export const globalErrorHandler: ErrorHandler<AppEnv> = (err, c) => {
+  if (err instanceof AppError) {
+    return c.json({ error: err.message }, err.statusCode as ContentfulStatusCode);
+  }
+
+  if (err instanceof ZodError) {
+    return c.json({ error: formatZodIssues(err) }, 400);
+  }
+
+  if (err instanceof HTTPException) {
+    const status = err.status as ContentfulStatusCode;
+    return c.json({ error: err.message || 'HTTP Error' }, status);
+  }
+
+  if (err instanceof SyntaxError) {
+    return c.json({ error: 'Invalid JSON request body' }, 400);
+  }
+
+  console.error('[UnhandledError]', err);
+  return c.json({ error: 'Internal server error' }, 500);
+};
+
+export const globalNotFoundHandler: NotFoundHandler<AppEnv> = (c) => {
+  return c.json({ error: `Route ${c.req.method} ${c.req.path} not found` }, 404);
+};
