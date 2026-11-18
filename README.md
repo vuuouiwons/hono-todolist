@@ -14,12 +14,12 @@ API Layer (src/api) ──▶ Application Layer (src/application) ◀── Infr
 
 - **`src/application/` (Core)** — Zero dependencies on `api` or `infrastructure`.
   - [models.ts](src/application/models.ts) & [errors.ts](src/application/errors.ts): Core models (`User`, `Todolist`, `Todo`, `Pagination`) and application errors (`ValidationError`, `UnauthorizedError`, `NotFoundError`, `ConflictError`).
-  - [ports.ts](src/application/ports.ts), [validation.ts](src/application/validation.ts) & [transactional.ts](src/application/transactional.ts): Infrastructure interfaces (`Transactor`, `Tx`, `UserRepository`, `TodolistRepository`, `TodoRepository`, `PasswordHasher`, `TokenService`), Zod schemas (`parseOrThrow`), plus NestJS-style `@Transactional()` decorator and `AsyncLocalStorage` (`runWithTx`, `getCurrentTx`) with `REQUIRED` propagation.
+  - [ports.ts](src/application/ports.ts), [validation.ts](src/application/validation.ts) & [transactional.ts](src/application/transactional.ts): Infrastructure interfaces (`Transactor`, `Tx`, `UserRepository`, `TodolistRepository`, `TodoRepository`, `PasswordHasher`, `TokenService`), Zod schemas (`parseOrThrow`), plus `AsyncLocalStorage` transaction propagation helpers (`runWithTx`, `bindTx`, `getCurrentTx`).
   - **Lightweight CQRS**:
-    - **Commands** (`src/application/commands/`): Handle writes, Zod validation, and transactions declaratively via `@Transactional()`.
+    - **Commands** (`src/application/commands/`): Handle writes, Zod validation, and ambient transaction propagation via `getCurrentTx()`.
     - **Queries** (`src/application/queries/`): Read retrieval using **Sequelize ORM abstraction** (`findAndCountAll`, `findOne`) via `TodolistRepository` and `TodoRepository` (zero raw SQL).
 - **`src/infrastructure/` (Thin Anti-Corruption Layer)**
-  - [database.ts](src/infrastructure/database.ts): Sequelize (SQLite) setup and `SequelizeTransactor`.
+  - [database.ts](src/infrastructure/database.ts): Sequelize (SQLite) setup, `SequelizeTransactor`, and `normalizeTimestamp`.
   - [repositories.ts](src/infrastructure/repositories.ts): `SequelizeUserRepository`, `SequelizeTodolistRepository`, and `SequelizeTodoRepository` reusing `Application` models directly (minimal mapper tax).
   - [security.ts](src/infrastructure/security.ts): `ScryptPasswordHasher` (`node:crypto`) and `HonoJwtTokenService` (`hono/jwt`).
 - **`src/api/` (Protocol Boundary & Mandatory DTO Mapper)**
@@ -45,7 +45,7 @@ API Layer (src/api) ──▶ Application Layer (src/application) ◀── Infr
 
 ## Testing Pyramid (`AGENTS.md` Section 3)
 
-- **Unit Tests** (`tests/unit/commands.test.ts`): Fast, DB-free tests for `AuthCommands`, `TodolistCommands`, and `TodoCommands` using mocked repositories and `Transactor`.
+- **Unit Tests** (`tests/unit/commands.test.ts`): Fast, DB-free tests for `AuthCommands`, `TodolistCommands`, and `TodoCommands` using mocked repositories and `runWithTx`.
 - **Integration Tests** (`tests/integration/queries-and-repos.test.ts`): Isolated `:memory:` SQLite Sequelize tests verifying `TodolistQueries`/`TodoQueries` and Sequelize ORM repository methods (`findAndCountAll`, `findOne`, `bulkCreate`, `update`, `destroy`), boolean/date mapping, and `SequelizeTransactor` rollbacks.
 - **E2E Smoke Tests** (`tests/e2e/api.test.ts`): Critical-path API tests, DTO security boundary checks, Hono middleware behaviors, OpenAPI/Scalar/Swagger endpoints, and `hc<AppType>` RPC.
 

@@ -1,7 +1,6 @@
 import { Op, UniqueConstraintError, type WhereOptions } from 'sequelize';
 import { ConflictError, NotFoundError } from '../application/errors.js';
 import {
-  normalizeTimestamp,
   type CreateTodoInput,
   type CreateTodolistInput,
   type Todo,
@@ -19,6 +18,7 @@ import type {
   UserRepository,
 } from '../application/ports.js';
 import {
+  normalizeTimestamp,
   unwrapTx,
   type TodoRecord,
   type TodoTable,

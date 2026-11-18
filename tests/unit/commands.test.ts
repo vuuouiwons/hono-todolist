@@ -18,12 +18,12 @@ import type {
   Tx,
   UserRepository,
 } from '../../src/application/ports.js';
-import { getCurrentTx, runWithTx } from '../../src/application/transactional.js';
+import { bindTx, getCurrentTx, runWithTx } from '../../src/application/transactional.js';
 
 function createMockTransactor() {
   const fakeTx: Tx = {};
   const transactor: Transactor = {
-    execInTransaction: vi.fn(async (fn) => fn(fakeTx)),
+    execInTransaction: vi.fn(async (fn) => bindTx(fakeTx, () => fn(fakeTx))),
   };
   return { fakeTx, transactor };
 }
@@ -49,18 +49,20 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
         sign: vi.fn(async (payload) => `jwt:${payload.sub}:${payload.email}`),
         verify: vi.fn(async () => ({ sub: 1, email: 'user@example.com' })),
       };
-      const { fakeTx, transactor } = createMockTransactor();
-      const commands = new AuthCommands(users, passwordHasher, tokenService, transactor);
-      return { users, passwordHasher, tokenService, transactor, fakeTx, commands };
+      const commands = new AuthCommands(users, passwordHasher, tokenService);
+      return { users, passwordHasher, tokenService, commands };
     }
 
-    it('normalizes email, hashes password, and creates user inside transaction', async () => {
-      const { commands, users, passwordHasher, transactor, fakeTx } = setupAuthMocks();
+    it('normalizes email, hashes password, and uses ambient tx when run inside transaction scope', async () => {
+      const { commands, users, passwordHasher } = setupAuthMocks();
+      const { fakeTx, transactor } = createMockTransactor();
 
-      const created = await commands.register({
-        email: '  Alice@Example.COM ',
-        password: 'password123',
-      });
+      const created = await runWithTx(transactor, () =>
+        commands.register({
+          email: '  Alice@Example.COM ',
+          password: 'password123',
+        }),
+      );
 
       expect(created.email).toBe('alice@example.com');
       expect(passwordHasher.hash).toHaveBeenCalledWith('password123');
@@ -99,8 +101,8 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
       expect(users.create).not.toHaveBeenCalled();
     });
 
-    it('logs in valid user and throws UnauthorizedError on wrong email/password', async () => {
-      const { commands, users } = setupAuthMocks();
+    it('logs in valid user, verifies tokens, and throws UnauthorizedError on wrong credentials', async () => {
+      const { commands, users, tokenService } = setupAuthMocks();
       const storedUser: User = {
         id: 7,
         email: 'bob@example.com',
@@ -123,6 +125,10 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
       });
       expect(loginResult.token).toBe('jwt:7:bob@example.com');
       expect(loginResult.user).toEqual(storedUser);
+
+      const verified = await commands.verifyToken('some-token');
+      expect(tokenService.verify).toHaveBeenCalledWith('some-token');
+      expect(verified).toEqual({ sub: 1, email: 'user@example.com' });
     });
   });
 
@@ -155,21 +161,27 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
         ),
         deleteMany: vi.fn(async (_userId, ids) => ids.length),
       };
-      const { fakeTx, transactor } = createMockTransactor();
-      const commands = new TodolistCommands(repo, transactor);
-      return { repo, fakeTx, transactor, commands };
+      const commands = new TodolistCommands(repo);
+      return { repo, commands };
     }
 
-    it('trims titles on createSingle/createBulk and executes inside Transactor', async () => {
-      const { commands, repo, fakeTx, transactor } = setupTodolistMocks();
+    it('trims titles on createSingle/createBulk and forwards ambient tx', async () => {
+      const { commands, repo } = setupTodolistMocks();
+      const { fakeTx, transactor } = createMockTransactor();
 
-      const single = await commands.createSingle(1, { title: '  Groceries  ' });
+      const single = await runWithTx(transactor, () =>
+        commands.createSingle(1, { title: '  Groceries  ' }),
+      );
       expect(single.title).toBe('Groceries');
-      expect(transactor.execInTransaction).toHaveBeenCalledTimes(1);
       expect(repo.createMany).toHaveBeenCalledWith(1, [{ title: 'Groceries' }], fakeTx);
 
       const bulk = await commands.createBulk(1, [{ title: ' A ' }, { title: ' B ' }]);
       expect(bulk.map((b) => b.title)).toEqual(['A', 'B']);
+      expect(repo.createMany).toHaveBeenLastCalledWith(
+        1,
+        [{ title: 'A' }, { title: 'B' }],
+        undefined,
+      );
     });
 
     it('validates create/update/delete inputs cleanly', async () => {
@@ -190,19 +202,20 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
     });
 
     it('throws NotFoundError when deleteById deletes 0 rows and deduplicates deleteMany IDs', async () => {
-      const { commands, repo, fakeTx } = setupTodolistMocks();
+      const { commands, repo } = setupTodolistMocks();
       vi.mocked(repo.deleteMany).mockResolvedValueOnce(0);
 
       await expect(commands.deleteById(1, 99)).rejects.toThrow(NotFoundError);
 
       vi.mocked(repo.deleteMany).mockResolvedValueOnce(2);
       const many = await commands.deleteMany(1, [5, 6, 5]);
-      expect(repo.deleteMany).toHaveBeenLastCalledWith(1, [5, 6], fakeTx);
+      expect(repo.deleteMany).toHaveBeenLastCalledWith(1, [5, 6], undefined);
       expect(many).toEqual({ deletedCount: 2, requestedIDs: [5, 6, 5] });
     });
 
-    it('enforces REQUIRED propagation when nested @Transactional() methods run in an active tx', async () => {
-      const { commands, repo, fakeTx, transactor } = setupTodolistMocks();
+    it('reuses a single ambient transaction across multiple command calls via runWithTx', async () => {
+      const { commands, repo } = setupTodolistMocks();
+      const { fakeTx, transactor } = createMockTransactor();
 
       await runWithTx(transactor, async (outerTx) => {
         expect(getCurrentTx()).toBe(outerTx);
@@ -210,7 +223,6 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
         await commands.createBulk(1, [{ title: 'Second' }]);
       });
 
-      // Outer runWithTx opened 1 transaction; nested @Transactional() methods joined it
       expect(transactor.execInTransaction).toHaveBeenCalledTimes(1);
       expect(repo.createMany).toHaveBeenNthCalledWith(1, 1, [{ title: 'First' }], fakeTx);
       expect(repo.createMany).toHaveBeenNthCalledWith(2, 1, [{ title: 'Second' }], fakeTx);
@@ -248,15 +260,17 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
         ),
         deleteMany: vi.fn(async (_userId, ids) => ids.length),
       };
-      const { fakeTx, transactor } = createMockTransactor();
-      const commands = new TodoCommands(repo, transactor);
-      return { repo, fakeTx, transactor, commands };
+      const commands = new TodoCommands(repo);
+      return { repo, commands };
     }
 
     it('defaults check to false and trims messages on create', async () => {
-      const { commands, repo, fakeTx } = setupTodoMocks();
+      const { commands, repo } = setupTodoMocks();
+      const { fakeTx, transactor } = createMockTransactor();
 
-      const todo = await commands.createSingle(2, { message: '  Buy milk  ' });
+      const todo = await runWithTx(transactor, () =>
+        commands.createSingle(2, { message: '  Buy milk  ' }),
+      );
       expect(todo.check).toBe(false);
       expect(repo.createMany).toHaveBeenCalledWith(
         2,
@@ -266,7 +280,7 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
     });
 
     it('validates partial updates and requires at least one of message or check', async () => {
-      const { commands, repo, fakeTx } = setupTodoMocks();
+      const { commands, repo } = setupTodoMocks();
 
       await expect(commands.updateSingle(1, { id: 1 })).rejects.toThrow(ValidationError);
       await expect(commands.updateSingle(1, { id: 1, message: '  ' })).rejects.toThrow(
@@ -288,7 +302,7 @@ describe('Unit Tests: Application Commands (Mocked Ports, No DB)', () => {
           { id: 1, check: true },
           { id: 2, message: 'Clean code' },
         ],
-        fakeTx,
+        undefined,
       );
     });
 

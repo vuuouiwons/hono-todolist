@@ -67,7 +67,3 @@ export function createPagination(page: number, limit: number, totalItems: number
     hasPrev: page > 1,
   };
 }
-
-export function normalizeTimestamp(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}

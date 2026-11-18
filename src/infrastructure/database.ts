@@ -10,7 +10,7 @@ import {
 } from 'sequelize';
 import type { Todo, Todolist, User } from '../application/models.js';
 import type { Transactor, Tx } from '../application/ports.js';
-import { getCurrentTx } from '../application/transactional.js';
+import { bindTx, getCurrentTx } from '../application/transactional.js';
 
 type UserAttrs = Omit<User, 'createdAt'> & { createdAt: Date; updatedAt: Date };
 type UserCreationAttrs = Optional<UserAttrs, 'id' | 'createdAt' | 'updatedAt'>;
@@ -49,6 +49,10 @@ export interface DatabaseOptions {
   logging?: boolean;
 }
 
+export function normalizeTimestamp(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 export function unwrapTx(tx?: Tx): Transaction | undefined {
   return (tx ?? getCurrentTx()) as unknown as Transaction | undefined;
 }
@@ -57,7 +61,15 @@ export class SequelizeTransactor implements Transactor {
   constructor(private readonly sequelize: Sequelize) {}
 
   async execInTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    return this.sequelize.transaction((transaction) => fn(transaction as unknown as Tx));
+    const existingTx = getCurrentTx();
+    if (existingTx) {
+      return fn(existingTx);
+    }
+
+    return this.sequelize.transaction((transaction) => {
+      const tx = transaction as unknown as Tx;
+      return bindTx(tx, () => fn(tx));
+    });
   }
 }
 

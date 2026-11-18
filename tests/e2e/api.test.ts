@@ -186,7 +186,7 @@ describe('E2E Smoke Tests: Hono API, DTO Security Boundary & Capabilities', () =
     expect(listBefore.status).toBe(200);
     expect(txSpy).not.toHaveBeenCalled();
 
-    // Mutating POST opens exactly 1 request-scoped transaction (shared with @Transactional() commands)
+    // Mutating POST opens exactly 1 request-scoped transaction shared via AsyncLocalStorage
     const createdRes = await app.request('/api/v1/todo', {
       method: 'POST',
       headers,

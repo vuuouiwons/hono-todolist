@@ -70,7 +70,7 @@ export function createApp(container: AppContainer, options: CreateAppOptions = {
     description: 'Enter JWT token obtained from /api/v1/login',
   });
 
-  const authMiddleware = createAuthMiddleware(container.tokenService);
+  const authMiddleware = createAuthMiddleware(container.commands.auth);
 
   const authRoutes = createAuthRoutes(container.commands.auth);
   const todolistRoutes = createTodolistRoutes(

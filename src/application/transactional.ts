@@ -3,19 +3,22 @@ import type { Transactor, Tx } from './ports.js';
 
 const txStorage = new AsyncLocalStorage<Tx>();
 
-export interface TransactionalHost {
-  readonly transactor: Transactor;
-}
-
 /**
- * Returns the active transaction from AsyncLocalStorage, if any.
+ * Returns the active request-scoped transaction from AsyncLocalStorage, if any.
  */
 export function getCurrentTx(): Tx | undefined {
   return txStorage.getStore();
 }
 
 /**
- * Executes `fn` inside a transaction with NestJS/Spring-style REQUIRED propagation:
+ * Binds a transaction to AsyncLocalStorage for the duration of `fn`.
+ */
+export function bindTx<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
+  return txStorage.run(tx, fn);
+}
+
+/**
+ * Executes `fn` inside a transaction with REQUIRED propagation:
  * joins an active ambient transaction if one already exists, otherwise begins a new one.
  */
 export async function runWithTx<T>(
@@ -27,20 +30,4 @@ export async function runWithTx<T>(
     return fn(existingTx);
   }
   return transactor.execInTransaction((tx) => txStorage.run(tx, () => fn(tx)));
-}
-
-/**
- * NestJS-style `@Transactional()` method decorator (ES Stage 3 Decorator).
- * Wraps the decorated async method in `runWithTx(this.transactor, ...)` so callers
- * share or open an ACID transaction without explicit boilerplate.
- */
-export function Transactional() {
-  return function <This extends TransactionalHost, Args extends unknown[], Return>(
-    originalMethod: (this: This, ...args: Args) => Promise<Return>,
-    _context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Promise<Return>>,
-  ) {
-    return async function (this: This, ...args: Args): Promise<Return> {
-      return runWithTx(this.transactor, () => originalMethod.apply(this, args));
-    };
-  };
 }

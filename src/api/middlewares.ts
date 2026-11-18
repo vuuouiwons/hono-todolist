@@ -6,8 +6,9 @@ import type { RequestIdVariables } from 'hono/request-id';
 import type { TimingVariables } from 'hono/timing';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
+import type { AuthCommands } from '../application/commands/auth.commands.js';
 import { AppError, UnauthorizedError } from '../application/errors.js';
-import type { TokenService, Transactor, Tx } from '../application/ports.js';
+import type { Transactor, Tx } from '../application/ports.js';
 import { runWithTx } from '../application/transactional.js';
 import { formatZodIssues } from '../application/validation.js';
 import type { BulkDeleteRequestDTO } from './dtos.js';
@@ -80,7 +81,7 @@ export function createTransactionMiddleware(transactor: Transactor) {
   });
 }
 
-export function createAuthMiddleware(tokenService: TokenService) {
+export function createAuthMiddleware(authCommands: Pick<AuthCommands, 'verifyToken'>) {
   return createMiddleware<AppEnv>(async (c, next) => {
     const authHeader = c.req.header('Authorization');
     if (!authHeader) {
@@ -92,7 +93,7 @@ export function createAuthMiddleware(tokenService: TokenService) {
       throw new UnauthorizedError('Authorization header must use Bearer token scheme');
     }
 
-    const payload = await tokenService.verify(match[1]);
+    const payload = await authCommands.verifyToken(match[1]);
     c.set('userId', payload.sub);
     c.set('userEmail', payload.email);
 

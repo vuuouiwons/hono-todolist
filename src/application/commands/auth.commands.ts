@@ -1,7 +1,7 @@
 import { ConflictError, UnauthorizedError } from '../errors.js';
 import type { User } from '../models.js';
-import type { PasswordHasher, TokenService, Transactor, UserRepository } from '../ports.js';
-import { getCurrentTx, Transactional } from '../transactional.js';
+import type { PasswordHasher, TokenPayload, TokenService, UserRepository } from '../ports.js';
+import { getCurrentTx } from '../transactional.js';
 import { AuthLoginSchema, AuthRegisterSchema, parseOrThrow } from '../validation.js';
 
 export interface AuthInput {
@@ -19,10 +19,8 @@ export class AuthCommands {
     private readonly users: UserRepository,
     private readonly passwordHasher: PasswordHasher,
     private readonly tokenService: TokenService,
-    public readonly transactor: Transactor,
   ) {}
 
-  @Transactional()
   async register(input: AuthInput): Promise<User> {
     const { email, password } = parseOrThrow(AuthRegisterSchema, input);
 
@@ -38,7 +36,7 @@ export class AuthCommands {
 
   async login(input: AuthInput): Promise<LoginResult> {
     const { email, password } = parseOrThrow(AuthLoginSchema, input);
-    const user = await this.users.findByEmail(email);
+    const user = await this.users.findByEmail(email, getCurrentTx());
 
     if (!user) {
       throw new UnauthorizedError('Invalid email or password');
@@ -55,5 +53,9 @@ export class AuthCommands {
     });
 
     return { token, user };
+  }
+
+  async verifyToken(token: string): Promise<TokenPayload> {
+    return this.tokenService.verify(token);
   }
 }

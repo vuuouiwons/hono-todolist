@@ -1,7 +1,7 @@
 import { AuthCommands } from './application/commands/auth.commands.js';
 import { TodoCommands } from './application/commands/todo.commands.js';
 import { TodolistCommands } from './application/commands/todolist.commands.js';
-import type { TokenService, Transactor } from './application/ports.js';
+import type { Transactor } from './application/ports.js';
 import { TodoQueries } from './application/queries/todo.queries.js';
 import { TodolistQueries } from './application/queries/todolist.queries.js';
 import { initializeDatabase } from './infrastructure/database.js';
@@ -20,7 +20,6 @@ export interface ContainerConfig {
 }
 
 export interface AppContainer {
-  tokenService: TokenService;
   transactor: Transactor;
   commands: {
     auth: AuthCommands;
@@ -50,12 +49,11 @@ export async function createContainer(config: ContainerConfig = {}): Promise<App
   const tokenService = new HonoJwtTokenService(jwtSecret, config.jwtTtlSeconds);
 
   return {
-    tokenService,
     transactor: database.transactor,
     commands: {
-      auth: new AuthCommands(userRepository, passwordHasher, tokenService, database.transactor),
-      todolist: new TodolistCommands(todolistRepository, database.transactor),
-      todo: new TodoCommands(todoRepository, database.transactor),
+      auth: new AuthCommands(userRepository, passwordHasher, tokenService),
+      todolist: new TodolistCommands(todolistRepository),
+      todo: new TodoCommands(todoRepository),
     },
     queries: {
       todolist: new TodolistQueries(todolistRepository),
