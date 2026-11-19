@@ -1,3 +1,5 @@
+import type { ZodError } from 'zod';
+
 export class AppError extends Error {
   public readonly statusCode: number;
 
@@ -30,4 +32,13 @@ export class ConflictError extends AppError {
   constructor(message = 'Resource already exists') {
     super(message, 409);
   }
+}
+
+export function formatZodIssues(error: ZodError): string {
+  const firstIssue = error.issues[0];
+  if (!firstIssue) {
+    return 'Validation error';
+  }
+  const path = firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ` : '';
+  return `${path}${firstIssue.message}`;
 }

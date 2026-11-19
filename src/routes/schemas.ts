@@ -1,13 +1,12 @@
 import { z } from '@hono/zod-openapi';
 
-// Shared DTOs
-export const ErrorResponseDTO = z
+export const ErrorResponseSchema = z
   .object({
     error: z.string().openapi({ example: 'Error message description' }),
   })
   .openapi('ErrorResponse');
 
-export const PaginationResponseDTO = z
+export const PaginationSchema = z
   .object({
     page: z.number().int().openapi({ example: 1 }),
     limit: z.number().int().openapi({ example: 10 }),
@@ -18,7 +17,7 @@ export const PaginationResponseDTO = z
   })
   .openapi('Pagination');
 
-export const IdParamDTO = z.object({
+export const IdParamSchema = z.object({
   id: z.coerce
     .number()
     .int()
@@ -26,7 +25,7 @@ export const IdParamDTO = z.object({
     .openapi({ param: { name: 'id', in: 'path' }, example: 1 }),
 });
 
-export const PaginationQueryDTO = z.object({
+export const PaginationQuerySchema = z.object({
   page: z.coerce
     .number()
     .int()
@@ -50,34 +49,34 @@ export const PaginationQueryDTO = z.object({
     }),
 });
 
-export const PositiveIntIdDTO = z.number().int().positive();
+export const PositiveIntIdSchema = z.number().int().positive();
 
-export const BulkDeleteRequestDTO = z.union([
-  z.array(PositiveIntIdDTO).min(1).openapi({ example: [1, 2, 3] }),
-  z.object({ id: PositiveIntIdDTO.openapi({ example: 1 }) }),
-  z.object({ ids: z.array(PositiveIntIdDTO).min(1).openapi({ example: [1, 2, 3] }) }),
+export const BulkDeleteBodySchema = z.union([
+  z.array(PositiveIntIdSchema).min(1).openapi({ example: [1, 2, 3] }),
+  z.object({ id: PositiveIntIdSchema.openapi({ example: 1 }) }),
+  z.object({ ids: z.array(PositiveIntIdSchema).min(1).openapi({ example: [1, 2, 3] }) }),
 ]);
 
-export const BulkDeleteResponseDTO = z.object({
+export const BulkDeleteResponseSchema = z.object({
   message: z.string().openapi({ example: 'Items deleted successfully' }),
   deletedCount: z.number().int().openapi({ example: 2 }),
   requestedIDs: z.array(z.number().int()).openapi({ example: [1, 2] }),
 });
 
-export const DeleteByIdResponseDTO = z.object({
+export const DeleteByIdResponseSchema = z.object({
   message: z.string().openapi({ example: 'Item deleted successfully' }),
   id: z.number().int().openapi({ example: 1 }),
 });
 
-// Auth DTOs
-export const AuthRequestDTO = z
+// Auth schemas
+export const AuthRequestSchema = z
   .object({
     email: z.string().trim().email().openapi({ example: 'user@example.com' }),
     password: z.string().min(6).openapi({ example: 'securepassword123' }),
   })
   .openapi('AuthRequest');
 
-export const UserResponseDTO = z
+export const UserResponseSchema = z
   .object({
     id: z.number().int().openapi({ example: 1 }),
     email: z.string().email().openapi({ example: 'user@example.com' }),
@@ -85,23 +84,23 @@ export const UserResponseDTO = z
   })
   .openapi('UserResponse');
 
-export const RegisterResponseDTO = z
+export const RegisterResponseSchema = z
   .object({
     message: z.string().openapi({ example: 'User registered successfully' }),
-    data: UserResponseDTO,
+    data: UserResponseSchema,
   })
   .openapi('RegisterResponse');
 
-export const LoginResponseDTO = z
+export const LoginResponseSchema = z
   .object({
     message: z.string().openapi({ example: 'Login successful' }),
     token: z.string().openapi({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }),
-    data: UserResponseDTO,
+    data: UserResponseSchema,
   })
   .openapi('LoginResponse');
 
-// Todolist DTOs
-export const TodolistResponseDTO = z
+// Todolist schemas
+export const TodolistSchema = z
   .object({
     id: z.number().int().openapi({ example: 1 }),
     userId: z.number().int().openapi({ example: 1 }),
@@ -111,31 +110,31 @@ export const TodolistResponseDTO = z
   })
   .openapi('Todolist');
 
-export const CreateTodolistRequestDTO = z
+export const CreateTodolistRequestSchema = z
   .object({
     title: z.string().trim().min(1, 'Title is required').openapi({ example: 'Work Tasks' }),
   })
   .openapi('CreateTodolistRequest');
 
-export const UpdateTodolistRequestDTO = z
+export const UpdateTodolistRequestSchema = z
   .object({
-    id: PositiveIntIdDTO.openapi({ example: 1 }),
+    id: PositiveIntIdSchema.openapi({ example: 1 }),
     title: z.string().trim().min(1, 'Title is required').openapi({ example: 'Work Tasks Updated' }),
   })
   .openapi('UpdateTodolistRequest');
 
-export const CreateTodolistBodyDTO = z.union([
-  CreateTodolistRequestDTO,
-  z.array(CreateTodolistRequestDTO).min(1),
-  z.object({ items: z.array(CreateTodolistRequestDTO).min(1) }),
+export const CreateTodolistBodySchema = z.union([
+  CreateTodolistRequestSchema,
+  z.array(CreateTodolistRequestSchema).min(1),
+  z.object({ items: z.array(CreateTodolistRequestSchema).min(1) }),
 ]);
 
-export const UpdateTodolistBodyDTO = z.union([
-  UpdateTodolistRequestDTO,
-  z.array(UpdateTodolistRequestDTO).min(1),
+export const UpdateTodolistBodySchema = z.union([
+  UpdateTodolistRequestSchema,
+  z.array(UpdateTodolistRequestSchema).min(1),
 ]);
 
-export const TodolistQueryDTO = PaginationQueryDTO.extend({
+export const TodolistQuerySchema = PaginationQuerySchema.extend({
   search: z
     .string()
     .optional()
@@ -146,29 +145,29 @@ export const TodolistQueryDTO = PaginationQueryDTO.extend({
     }),
 });
 
-export const PaginatedTodolistResponseDTO = z
+export const PaginatedTodolistResponseSchema = z
   .object({
-    data: z.array(TodolistResponseDTO),
-    pagination: PaginationResponseDTO,
+    data: z.array(TodolistSchema),
+    pagination: PaginationSchema,
   })
   .openapi('PaginatedTodolistResponse');
 
-export const TodolistMutationResponseDTO = z.object({
+export const TodolistMutationResponseSchema = z.object({
   message: z.string(),
-  data: z.union([TodolistResponseDTO, z.array(TodolistResponseDTO)]),
+  data: z.union([TodolistSchema, z.array(TodolistSchema)]),
 });
 
-export const SingleTodolistResponseDTO = z.object({
-  data: TodolistResponseDTO,
+export const SingleTodolistResponseSchema = z.object({
+  data: TodolistSchema,
 });
 
-export const SingleTodolistMutationResponseDTO = z.object({
+export const SingleTodolistMutationResponseSchema = z.object({
   message: z.string(),
-  data: TodolistResponseDTO,
+  data: TodolistSchema,
 });
 
-// Todo DTOs
-export const TodoResponseDTO = z
+// Todo schemas
+export const TodoSchema = z
   .object({
     id: z.number().int().openapi({ example: 1 }),
     userId: z.number().int().openapi({ example: 1 }),
@@ -179,16 +178,16 @@ export const TodoResponseDTO = z
   })
   .openapi('Todo');
 
-export const CreateTodoRequestDTO = z
+export const CreateTodoRequestSchema = z
   .object({
     message: z.string().trim().min(1, 'Message is required').openapi({ example: 'Buy groceries' }),
     check: z.boolean().default(false).openapi({ example: false }),
   })
   .openapi('CreateTodoRequest');
 
-export const UpdateTodoRequestDTO = z
+export const UpdateTodoRequestSchema = z
   .object({
-    id: PositiveIntIdDTO.openapi({ example: 1 }),
+    id: PositiveIntIdSchema.openapi({ example: 1 }),
     message: z.string().trim().min(1).optional().openapi({ example: 'Updated message' }),
     check: z.boolean().optional().openapi({ example: true }),
   })
@@ -197,7 +196,7 @@ export const UpdateTodoRequestDTO = z
   })
   .openapi('UpdateTodoRequest');
 
-export const PatchTodoByIdBodyDTO = z
+export const PatchTodoByIdBodySchema = z
   .object({
     message: z.string().trim().min(1).optional().openapi({ example: 'Updated message' }),
     check: z.boolean().optional().openapi({ example: true }),
@@ -206,17 +205,17 @@ export const PatchTodoByIdBodyDTO = z
     message: 'At least one of message or check must be provided',
   });
 
-export const CreateTodoBodyDTO = z.union([
-  CreateTodoRequestDTO,
-  z.array(CreateTodoRequestDTO).min(1),
+export const CreateTodoBodySchema = z.union([
+  CreateTodoRequestSchema,
+  z.array(CreateTodoRequestSchema).min(1),
 ]);
 
-export const UpdateTodoBodyDTO = z.union([
-  UpdateTodoRequestDTO,
-  z.array(UpdateTodoRequestDTO).min(1),
+export const UpdateTodoBodySchema = z.union([
+  UpdateTodoRequestSchema,
+  z.array(UpdateTodoRequestSchema).min(1),
 ]);
 
-export const TodoQueryDTO = PaginationQueryDTO.extend({
+export const TodoQuerySchema = PaginationQuerySchema.extend({
   search: z
     .string()
     .optional()
@@ -237,23 +236,23 @@ export const TodoQueryDTO = PaginationQueryDTO.extend({
     }),
 });
 
-export const PaginatedTodoResponseDTO = z
+export const PaginatedTodoResponseSchema = z
   .object({
-    data: z.array(TodoResponseDTO),
-    pagination: PaginationResponseDTO,
+    data: z.array(TodoSchema),
+    pagination: PaginationSchema,
   })
   .openapi('PaginatedTodoResponse');
 
-export const TodoMutationResponseDTO = z.object({
+export const TodoMutationResponseSchema = z.object({
   message: z.string(),
-  data: z.union([TodoResponseDTO, z.array(TodoResponseDTO)]),
+  data: z.union([TodoSchema, z.array(TodoSchema)]),
 });
 
-export const SingleTodoResponseDTO = z.object({
-  data: TodoResponseDTO,
+export const SingleTodoResponseSchema = z.object({
+  data: TodoSchema,
 });
 
-export const SingleTodoMutationResponseDTO = z.object({
+export const SingleTodoMutationResponseSchema = z.object({
   message: z.string(),
-  data: TodoResponseDTO,
+  data: TodoSchema,
 });

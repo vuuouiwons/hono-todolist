@@ -1,32 +1,29 @@
-# Hono Todolist Backend — Pragmatic Layered Architecture
+# Hono Todolist Backend — Pragmatic 3-Layer Architecture
 
-A **Hono** + **TypeScript** + **Sequelize ORM (SQLite)** backend implementing 100% of [`openapi.json`](./openapi.json), structured around the **Pragmatic 3-Layer Architecture** defined in [`AGENTS.md`](./AGENTS.md) and showcasing what Hono and its complementary ecosystem are capable of.
+A **Hono** + **TypeScript** + **Sequelize ORM (SQLite)** backend implementing 100% of [`openapi.json`](./openapi.json), structured around the **Pragmatic 3-Layer Architecture** defined in [`AGENTS.md`](./AGENTS.md) and showcasing what Hono and its ecosystem are capable of.
 
 ---
 
 ## Architecture (`AGENTS.md`)
 
-Instead of dogmatic 4-layer Clean/Hexagonal boilerplate, the codebase is split into **three clean layers** where dependencies flow strictly **inward** toward `Application`:
+`Inbound Interface (HTTP)` ➔ `Routes (src/routes/)` ➔ `Services (src/services/)` ➔ `Data Access (src/db/)`
 
 ```text
-API Layer (src/api) ──▶ Application Layer (src/application) ◀── Infrastructure Layer (src/infrastructure)
+src/
+├── routes/        # Transport layer, Zod OpenAPI validation, auth/tx middleware, safe response shaping
+├── services/      # Business logic, workflows, and ACID transaction orchestration (zero HTTP imports)
+├── db/            # Sequelize connection, AsyncLocalStorage CLS, ORM models, and reusable repositories/
+├── utils/         # Stateless helpers (scrypt & JWT auth, custom errors, pagination)
+├── app.ts         # Hono app assembly & OpenAPI/Scalar/Swagger documentation
+├── client.ts      # Hono RPC client (hc<AppType>)
+└── index.ts       # Node server entrypoint (@hono/node-server)
 ```
 
-- **`src/application/` (Core)** — Zero dependencies on `api` or `infrastructure`.
-  - [models.ts](src/application/models.ts) & [errors.ts](src/application/errors.ts): Core models (`User`, `Todolist`, `Todo`, `Pagination`) and application errors (`ValidationError`, `UnauthorizedError`, `NotFoundError`, `ConflictError`).
-  - [ports.ts](src/application/ports.ts), [validation.ts](src/application/validation.ts) & [transactional.ts](src/application/transactional.ts): Infrastructure interfaces (`Transactor`, `Tx`, `UserRepository`, `TodolistRepository`, `TodoRepository`, `PasswordHasher`, `TokenService`), Zod schemas (`parseOrThrow`), plus `AsyncLocalStorage` transaction propagation helpers (`runWithTx`, `bindTx`, `getCurrentTx`).
-  - **Lightweight CQRS**:
-    - **Commands** (`src/application/commands/`): Handle writes, Zod validation, and ambient transaction propagation via `getCurrentTx()`.
-    - **Queries** (`src/application/queries/`): Read retrieval using **Sequelize ORM abstraction** (`findAndCountAll`, `findOne`) via `TodolistRepository` and `TodoRepository` (zero raw SQL).
-- **`src/infrastructure/` (Thin Anti-Corruption Layer)**
-  - [database.ts](src/infrastructure/database.ts): Sequelize (SQLite) setup, `SequelizeTransactor`, and `normalizeTimestamp`.
-  - [repositories.ts](src/infrastructure/repositories.ts): `SequelizeUserRepository`, `SequelizeTodolistRepository`, and `SequelizeTodoRepository` reusing `Application` models directly (minimal mapper tax).
-  - [security.ts](src/infrastructure/security.ts): `ScryptPasswordHasher` (`node:crypto`) and `HonoJwtTokenService` (`hono/jwt`).
-- **`src/api/` (Protocol Boundary & Mandatory DTO Mapper)**
-  - [dtos.ts](src/api/dtos.ts): Explicit Zod OpenAPI Request & Response DTO schemas.
-  - [mappers.ts](src/api/mappers.ts): Mandatory explicit mappers (e.g., `toUserResponseDTO` explicitly maps fields so sensitive data like `passwordHash` can never leak).
-  - [middlewares.ts](src/api/middlewares.ts) & `src/api/routes/`: Hono routes invoking only `Application` Commands and Queries (never `Infrastructure` repositories), plus `createTransactionMiddleware` wrapping mutating HTTP requests (`POST`, `PATCH`, `PUT`, `DELETE`) in request-scoped transactions with automatic rollback on `>= 400` responses or errors.
-- **`src/container.ts`**: Composition root wiring `Infrastructure` adapters into `Application` Commands & Queries.
+Key principles enforced:
+- **Direct Module Imports**: No DI containers, no generic `IRepository` interfaces, and no duplicate DTO/Domain/Entity layers.
+- **Boundary Security Rule**: Controllers in `src/routes/` explicitly shape outbound payloads (`shapeUser`, `shapeTodolist`, `shapeTodo`) so sensitive fields like `passwordHash` are never exposed.
+- **Shared ORM Types**: `src/services/` reuses Sequelize-inferred `UserAttributes`, `TodolistAttributes`, and `TodoAttributes` directly from `src/db/`.
+- **CLS-Backed Transactions**: `src/db/` hooks `Sequelize.useCLS` to Node's `AsyncLocalStorage`, so `transactionMiddleware` (for mutating HTTP requests) and `withTransaction()` automatically share transactions across all Sequelize calls.
 
 ---
 
@@ -43,14 +40,6 @@ API Layer (src/api) ──▶ Application Layer (src/application) ◀── Infr
 
 ---
 
-## Testing Pyramid (`AGENTS.md` Section 3)
-
-- **Unit Tests** (`tests/unit/commands.test.ts`): Fast, DB-free tests for `AuthCommands`, `TodolistCommands`, and `TodoCommands` using mocked repositories and `runWithTx`.
-- **Integration Tests** (`tests/integration/queries-and-repos.test.ts`): Isolated `:memory:` SQLite Sequelize tests verifying `TodolistQueries`/`TodoQueries` and Sequelize ORM repository methods (`findAndCountAll`, `findOne`, `bulkCreate`, `update`, `destroy`), boolean/date mapping, and `SequelizeTransactor` rollbacks.
-- **E2E Smoke Tests** (`tests/e2e/api.test.ts`): Critical-path API tests, DTO security boundary checks, Hono middleware behaviors, OpenAPI/Scalar/Swagger endpoints, and `hc<AppType>` RPC.
-
----
-
 ## Commands (`pnpm`)
 
 ```bash
@@ -58,6 +47,6 @@ pnpm install        # Install dependencies
 pnpm dev            # Run dev server with hot reload on port 8080
 pnpm run typecheck  # Type-check all TypeScript sources
 pnpm run build      # Compile to dist/
-pnpm test           # Run Unit, Integration, and E2E test suites
+pnpm test           # Run integration and unit tests
 pnpm start          # Run compiled server
 ```

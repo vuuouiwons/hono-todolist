@@ -1,28 +1,40 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { MiddlewareHandler } from 'hono';
-import type { TodoCommands } from '../../application/commands/todo.commands.js';
-import type { TodoQueries } from '../../application/queries/todo.queries.js';
+import type { TodoAttributes } from '../db/index.js';
 import {
-  BulkDeleteRequestDTO,
-  BulkDeleteResponseDTO,
-  CreateTodoBodyDTO,
-  DeleteByIdResponseDTO,
-  ErrorResponseDTO,
-  IdParamDTO,
-  PaginatedTodoResponseDTO,
-  PatchTodoByIdBodyDTO,
-  SingleTodoMutationResponseDTO,
-  SingleTodoResponseDTO,
-  TodoMutationResponseDTO,
-  TodoQueryDTO,
-  UpdateTodoBodyDTO,
-} from '../dtos.js';
-import { toPaginatedTodoResponseDTO, toTodoResponseDTO } from '../mappers.js';
+  createTodos,
+  deleteTodoById,
+  deleteTodos,
+  getTodoById,
+  listTodos,
+  updateTodos,
+} from '../services/todo.service.js';
+import { authMiddleware, createOpenAPIRouter, extractBulkDeleteIds } from './middlewares.js';
 import {
-  createOpenAPIRouter,
-  extractBulkDeleteIds,
-  type AppEnv,
-} from '../middlewares.js';
+  BulkDeleteBodySchema,
+  BulkDeleteResponseSchema,
+  CreateTodoBodySchema,
+  DeleteByIdResponseSchema,
+  ErrorResponseSchema,
+  IdParamSchema,
+  PaginatedTodoResponseSchema,
+  PatchTodoByIdBodySchema,
+  SingleTodoMutationResponseSchema,
+  SingleTodoResponseSchema,
+  TodoMutationResponseSchema,
+  TodoQuerySchema,
+  UpdateTodoBodySchema,
+} from './schemas.js';
+
+function shapeTodo(item: TodoAttributes) {
+  return {
+    id: item.id,
+    userId: item.userId,
+    message: item.message,
+    check: Boolean(item.check),
+    createdAt: new Date(item.createdAt).toISOString(),
+    updatedAt: new Date(item.updatedAt).toISOString(),
+  };
+}
 
 const getTodosRoute = createRoute({
   method: 'get',
@@ -31,19 +43,19 @@ const getTodosRoute = createRoute({
   tags: ['Todo'],
   summary: 'Get paginated todos (bulk)',
   security: [{ BearerAuth: [] }],
-  request: { query: TodoQueryDTO },
+  request: { query: TodoQuerySchema },
   responses: {
     200: {
       description: 'Paginated list of todos',
-      content: { 'application/json': { schema: PaginatedTodoResponseDTO } },
+      content: { 'application/json': { schema: PaginatedTodoResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -58,21 +70,21 @@ const createTodoRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: CreateTodoBodyDTO } },
+      content: { 'application/json': { schema: CreateTodoBodySchema } },
     },
   },
   responses: {
     201: {
       description: 'Todo(s) created successfully',
-      content: { 'application/json': { schema: TodoMutationResponseDTO } },
+      content: { 'application/json': { schema: TodoMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -87,25 +99,25 @@ const patchTodosRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: UpdateTodoBodyDTO } },
+      content: { 'application/json': { schema: UpdateTodoBodySchema } },
     },
   },
   responses: {
     200: {
       description: 'Todo(s) updated successfully',
-      content: { 'application/json': { schema: TodoMutationResponseDTO } },
+      content: { 'application/json': { schema: TodoMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -120,21 +132,21 @@ const deleteTodosRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: BulkDeleteRequestDTO } },
+      content: { 'application/json': { schema: BulkDeleteBodySchema } },
     },
   },
   responses: {
     200: {
       description: 'Todo(s) deleted successfully',
-      content: { 'application/json': { schema: BulkDeleteResponseDTO } },
+      content: { 'application/json': { schema: BulkDeleteResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -146,23 +158,23 @@ const getTodoByIdRoute = createRoute({
   tags: ['Todo'],
   summary: 'Get single todo by ID',
   security: [{ BearerAuth: [] }],
-  request: { params: IdParamDTO },
+  request: { params: IdParamSchema },
   responses: {
     200: {
       description: 'Todo found',
-      content: { 'application/json': { schema: SingleTodoResponseDTO } },
+      content: { 'application/json': { schema: SingleTodoResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -175,28 +187,28 @@ const patchTodoByIdRoute = createRoute({
   summary: 'Update single todo by URL ID',
   security: [{ BearerAuth: [] }],
   request: {
-    params: IdParamDTO,
+    params: IdParamSchema,
     body: {
       required: true,
-      content: { 'application/json': { schema: PatchTodoByIdBodyDTO } },
+      content: { 'application/json': { schema: PatchTodoByIdBodySchema } },
     },
   },
   responses: {
     200: {
       description: 'Todo updated successfully',
-      content: { 'application/json': { schema: SingleTodoMutationResponseDTO } },
+      content: { 'application/json': { schema: SingleTodoMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -208,32 +220,28 @@ const deleteTodoByIdRoute = createRoute({
   tags: ['Todo'],
   summary: 'Delete single todo by URL ID',
   security: [{ BearerAuth: [] }],
-  request: { params: IdParamDTO },
+  request: { params: IdParamSchema },
   responses: {
     200: {
       description: 'Todo deleted successfully',
-      content: { 'application/json': { schema: DeleteByIdResponseDTO } },
+      content: { 'application/json': { schema: DeleteByIdResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-export function createTodoRoutes(
-  authMiddleware: MiddlewareHandler<AppEnv>,
-  commands: TodoCommands,
-  queries: TodoQueries,
-) {
+export function createTodoRoutes() {
   const router = createOpenAPIRouter();
   router.use('*', authMiddleware);
 
@@ -241,55 +249,55 @@ export function createTodoRoutes(
     .openapi(getTodosRoute, async (c) => {
       const userId = c.get('userId');
       const query = c.req.valid('query');
-      const result = await queries.list({
+      const result = await listTodos({
         userId,
         page: query.page,
         limit: query.limit,
         search: query.search,
         check: query.check,
       });
-      return c.json(toPaginatedTodoResponseDTO(result), 200);
+      return c.json(
+        {
+          data: result.data.map(shapeTodo),
+          pagination: result.pagination,
+        },
+        200,
+      );
     })
     .openapi(createTodoRoute, async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
 
       if (Array.isArray(body)) {
-        const created = await commands.createBulk(userId, body);
+        const created = await createTodos(userId, body);
         return c.json(
-          { message: 'Todos created successfully', data: created.map(toTodoResponseDTO) },
+          { message: 'Todos created successfully', data: created.map(shapeTodo) },
           201,
         );
       }
 
-      const created = await commands.createSingle(userId, body);
-      return c.json(
-        { message: 'Todo created successfully', data: toTodoResponseDTO(created) },
-        201,
-      );
+      const [created] = await createTodos(userId, [body]);
+      return c.json({ message: 'Todo created successfully', data: shapeTodo(created) }, 201);
     })
     .openapi(patchTodosRoute, async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
 
       if (Array.isArray(body)) {
-        const updated = await commands.updateBulk(userId, body);
+        const updated = await updateTodos(userId, body);
         return c.json(
-          { message: 'Todos updated successfully', data: updated.map(toTodoResponseDTO) },
+          { message: 'Todos updated successfully', data: updated.map(shapeTodo) },
           200,
         );
       }
 
-      const updated = await commands.updateSingle(userId, body);
-      return c.json(
-        { message: 'Todo updated successfully', data: toTodoResponseDTO(updated) },
-        200,
-      );
+      const [updated] = await updateTodos(userId, [body]);
+      return c.json({ message: 'Todo updated successfully', data: shapeTodo(updated) }, 200);
     })
     .openapi(deleteTodosRoute, async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
-      const result = await commands.deleteMany(userId, extractBulkDeleteIds(body));
+      const result = await deleteTodos(userId, extractBulkDeleteIds(body));
       return c.json(
         {
           message: 'Todo(s) deleted successfully',
@@ -302,23 +310,20 @@ export function createTodoRoutes(
     .openapi(getTodoByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
-      const todo = await queries.getById(userId, id);
-      return c.json({ data: toTodoResponseDTO(todo) }, 200);
+      const todo = await getTodoById(userId, id);
+      return c.json({ data: shapeTodo(todo) }, 200);
     })
     .openapi(patchTodoByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      const updated = await commands.updateSingle(userId, { id, ...body });
-      return c.json(
-        { message: 'Todo updated successfully', data: toTodoResponseDTO(updated) },
-        200,
-      );
+      const [updated] = await updateTodos(userId, [{ id, ...body }]);
+      return c.json({ message: 'Todo updated successfully', data: shapeTodo(updated) }, 200);
     })
     .openapi(deleteTodoByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
-      const deletedId = await commands.deleteById(userId, id);
+      const deletedId = await deleteTodoById(userId, id);
       return c.json({ message: 'Todo deleted successfully', id: deletedId }, 200);
     });
 }

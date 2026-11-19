@@ -5,19 +5,18 @@ import { HTTPException } from 'hono/http-exception';
 import type { RequestIdVariables } from 'hono/request-id';
 import type { TimingVariables } from 'hono/timing';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { Transaction } from 'sequelize';
 import { ZodError } from 'zod';
-import type { AuthCommands } from '../application/commands/auth.commands.js';
-import { AppError, UnauthorizedError } from '../application/errors.js';
-import type { Transactor, Tx } from '../application/ports.js';
-import { runWithTx } from '../application/transactional.js';
-import { formatZodIssues } from '../application/validation.js';
-import type { BulkDeleteRequestDTO } from './dtos.js';
+import { withTransaction } from '../db/index.js';
+import { verifyToken } from '../utils/auth.js';
+import { AppError, UnauthorizedError, formatZodIssues } from '../utils/errors.js';
+import type { BulkDeleteBodySchema } from './schemas.js';
 
 export type AppVariables = RequestIdVariables &
   TimingVariables & {
     userId: number;
     userEmail: string;
-    tx?: Tx;
+    tx?: Transaction;
   };
 
 export type AppEnv = {
@@ -34,7 +33,7 @@ export function createOpenAPIRouter() {
   });
 }
 
-export function extractBulkDeleteIds(body: z.infer<typeof BulkDeleteRequestDTO>): number[] {
+export function extractBulkDeleteIds(body: z.infer<typeof BulkDeleteBodySchema>): number[] {
   if (Array.isArray(body)) {
     return body;
   }
@@ -52,54 +51,44 @@ class TransactionRollbackSignal extends Error {
   }
 }
 
-/**
- * Hono transaction middleware (analogous to NestJS `@Transactional()`):
- * opens a request-scoped transaction via `AsyncLocalStorage` for mutating
- * HTTP requests, sets `c.set('tx', tx)`, commits on success, and rolls back
- * if an unhandled error occurs or Hono produces an error response (`>= 400`).
- */
-export function createTransactionMiddleware(transactor: Transactor) {
-  return createMiddleware<AppEnv>(async (c, next) => {
-    if (!MUTATING_HTTP_METHODS.has(c.req.method)) {
-      await next();
-      return;
-    }
-
-    try {
-      await runWithTx(transactor, async (tx) => {
-        c.set('tx', tx);
-        await next();
-        if (c.error || c.res.status >= 400) {
-          throw new TransactionRollbackSignal();
-        }
-      });
-    } catch (error) {
-      if (!(error instanceof TransactionRollbackSignal)) {
-        throw error;
-      }
-    }
-  });
-}
-
-export function createAuthMiddleware(authCommands: Pick<AuthCommands, 'verifyToken'>) {
-  return createMiddleware<AppEnv>(async (c, next) => {
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader) {
-      throw new UnauthorizedError('Missing Authorization header');
-    }
-
-    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (!match || !match[1]) {
-      throw new UnauthorizedError('Authorization header must use Bearer token scheme');
-    }
-
-    const payload = await authCommands.verifyToken(match[1]);
-    c.set('userId', payload.sub);
-    c.set('userEmail', payload.email);
-
+export const transactionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
+  if (!MUTATING_HTTP_METHODS.has(c.req.method)) {
     await next();
-  });
-}
+    return;
+  }
+
+  try {
+    await withTransaction(async (tx) => {
+      c.set('tx', tx);
+      await next();
+      if (c.error || c.res.status >= 400) {
+        throw new TransactionRollbackSignal();
+      }
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackSignal)) {
+      throw error;
+    }
+  }
+});
+
+export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) {
+    throw new UnauthorizedError('Missing Authorization header');
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  if (!match || !match[1]) {
+    throw new UnauthorizedError('Authorization header must use Bearer token scheme');
+  }
+
+  const payload = await verifyToken(match[1]);
+  c.set('userId', payload.sub);
+  c.set('userEmail', payload.email);
+
+  await next();
+});
 
 export const globalErrorHandler: ErrorHandler<AppEnv> = (err, c) => {
   if (err instanceof AppError) {

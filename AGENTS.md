@@ -1,68 +1,56 @@
-# AGENTS.md — Pragmatic Layered Architecture Guidelines
+# AGENTS.md
 
-This codebase follows a **Pragmatic Layered Architecture** balancing testability, clear ownership, and low cognitive overhead without Clean/Hexagonal Architecture dogma.
+## Architecture Overview
+This repository follows a **Pragmatic 3-Layer Architecture** designed for high engineering velocity, clarity, and minimal boilerplate.
 
-## 1. Core Architectural Structure
+**Data & Dependency Flow:**
+`Inbound Interface (HTTP / CLI / Events)` ➔ `Controllers / Handlers` ➔ `Services` ➔ `Data Access (DB / ORM)`
 
-The system is divided into **three layers**:
-
-1. **API Layer** (Outer): Protocol concerns (HTTP, gRPC, GraphQL, message queues, CLI).
-2. **Application Layer** (Core): Business logic, domain/application types, commands, queries, and infrastructure interfaces.
-3. **Infrastructure Layer** (Outer): Thin Anti-Corruption Layer (ACL) implementing application interfaces (databases, Pub/Sub, external APIs).
-
-### Dependency & Call Flow Rules
-* **Call Flow (Runtime):** `API` → `Application` → `Infrastructure`
-* **Dependency Flow (Imports):** `API` → `Application` ← `Infrastructure`
-* **Strict Rule:** Dependencies MUST flow **inward** toward the `Application` layer.
-  * `API` and `Infrastructure` both import from `Application`.
-  * `API` and `Infrastructure` MUST NEVER import each other.
-  * `Application` MUST NEVER import `API` or `Infrastructure` packages.
-  * Circular dependencies are strictly prohibited.
+Do NOT introduce Clean Architecture, Hexagonal Architecture, Domain-Driven Design (DDD) aggregates, or multi-layer DTO mappers unless explicitly instructed.
 
 ---
 
-## 2. Layer-by-Layer Implementation Rules
-
-### Application Layer (`internal/app` or `src/application`)
-* **Ownership:** Defines all core data types/models and the interfaces required from infrastructure (e.g., `UserRepository`, `Transactor`, `Queryer`). Design interfaces around actual business needs and existing infrastructure capabilities—do not over-abstract for hypothetical database swaps.
-* **Lightweight CQRS:** Separate state mutations from data reads:
-  * **Commands:** Handle writes, validation, business rules, and transactions. Orchestrate infrastructure calls via interfaces.
-  * **Queries:** Handle data retrieval.
-* **SQL Placement & Pass-Through Avoidance:**
-  * **Direct SQL in Application Queries is ALLOWED and PREFERRED** for non-reused reads (using a lightweight `Queryer` interface) to eliminate useless pass-through boilerplate.
-  * Move queries to `Infrastructure` repositories **only when they need to be reused** across multiple application components.
-  * Never expose `Infrastructure` repositories directly to the `API` layer; outside callers interact with `Application` exclusively via Commands and Queries.
-* **Transactions:** Manage ACID transactions explicitly in Application Commands via a `Transactor` interface (e.g., `BeginTx` or `ExecInTransaction`) passed down into repository methods.
-
-### Infrastructure Layer (`internal/infra` or `src/infrastructure`)
-* **Thin Anti-Corruption Layer (ACL):** Keep business logic out of this layer. Focus strictly on database queries, external API clients, serialization, and enforcing strict types/naming conventions (e.g., UUIDs, Dates).
-* **Type Reuse (Minimal Mapper Tax):** Do NOT create separate database entity/DAO structs by default. Reuse `Application` layer types directly. Only introduce separate infrastructure types or extended structs if serialization or schema complexity genuinely requires it.
-
-### API Layer (`internal/api` or `src/api`)
-* **Mandatory Mapper Tax (Security Boundary):** This is the **one place** where explicit DTOs and mapping are strictly enforced.
-  * NEVER return `Application` domain types directly from API endpoints.
-  * Always define explicit Request/Response DTOs and write explicit mapping functions/transformers—even in structurally typed languages (e.g., TypeScript)—to prevent accidental leakage of sensitive fields (such as `PasswordHash` or internal metadata).
-* **CLI Exception:** Standard CLI commands should invoke `Application` Commands and Queries. One-off maintenance or emergency operational scripts may bypass the Application layer and talk to Infrastructure directly as a documented exception.
+## Directory Structure
+```text
+src/
+├── routes/        # (or controllers/handlers) Transport layer, input validation, response shaping
+├── services/      # Core business logic, workflows, and external integrations
+├── db/            # Database connection, schema/models, and reusable complex queries
+└── utils/         # Stateless helpers (auth, formatting, logging, custom errors)
+```
 
 ---
 
-## 3. Testing Strategy (Test Pyramid)
+## Layer Responsibilities & Rules
 
-Optimize for fast, reliable, deterministic tests:
+### 1. Routes / Controllers Layer (`src/routes/` or `src/controllers/`)
+- **Allowed:** Parse incoming requests, validate inputs (params, query, payload), enforce authentication/authorization, invoke services (or data access directly for trivial CRUD), and serialize responses.
+- **Forbidden:** Business rules, domain calculations, or multi-step orchestration.
+- **Boundary Security Rule:** Never expose raw database/ORM records directly in outbound responses if they contain sensitive or internal fields (e.g., `passwordHash`, internal tokens). Explicitly pick or shape the response payload at the controller boundary.
 
-* **Unit Tests (Majority — ~80–90% coverage target):**
-  * Focus heavily on **Application Commands** (where business logic lives).
-  * Mock out infrastructure interfaces (`Repository`, `Transactor`, external clients). Do not spin up databases for command unit tests.
-* **Integration Tests (Focused & Isolated):**
-  * Use integration tests against a **real, isolated test database** for **Application Queries** and **Infrastructure Repositories** to verify SQL syntax, constraints, and data mapping.
-* **End-to-End (E2E) Tests (Minimal):**
-  * Keep E2E tests limited to critical paths and smoke tests.
+### 2. Services Layer (`src/services/`)
+- **Allowed:** All business logic, domain rules, state mutations, database transactions, and calls to external APIs or third-party providers.
+- **Forbidden:** Importing transport/framework primitives (e.g., HTTP `Request`/`Response` objects, status codes, CLI context). Services must accept plain typed arguments and return plain data or throw domain/application errors.
+- **Flat Composition:** Avoid deep chains of services calling other services. When multiple services require shared logic, extract a stateless helper or shared internal function.
+
+### 3. Data Access Layer (`src/db/`)
+- **Allowed:** Direct use of the project's ORM, query builder, or database client.
+- **Forbidden:** Creating generic repository interfaces (`IRepository`) or pass-through wrapper classes around standard queries. Use the database client/ORM directly.
+- **Exception:** Extract a query into `src/db/queries/` only when it involves complex raw SQL or is reused across three or more distinct services.
 
 ---
 
-## 4. Anti-Patterns to Avoid
+## Pragmatic Shortcuts
+- **Trivial CRUD Bypass:** If an operation performs a straightforward single-entity read or write with zero business logic, the controller/handler MAY query the database/ORM directly rather than creating a pass-through service function.
+- **Shared Types:** Reuse schema-inferred or ORM-generated types across the `db` and `services` layers. Do not duplicate `Entity`, `DomainModel`, and `DTO` definitions for the same resource.
 
-* **Dogmatic File Explosion:** Do not create `UserDTO`, `UserDomain`, `UserEntity`, and `UserDAO` for a single feature. Keep `Application` types shared with `Infrastructure`, and map to `DTO`s only at the `API` boundary.
-* **Useless Pass-Through Methods:** Do not write a Query method that simply calls an identical Repository method unless that repository query is shared elsewhere.
-* **Leaking Internal Models to API:** Never rely solely on serialization tags (like `json:"-"`) or TypeScript structural compatibility to hide sensitive fields on domain models—map explicitly to API DTOs.
-* **Premature Abstraction:** Do not build generic repository frameworks or provider-agnostic wrappers unless polymorphic infrastructure is an immediate requirement.
+---
+
+## Coding & Testing Conventions
+- **Dependencies:** Prefer explicit, direct module imports over Dependency Injection (DI) containers, reflection, or heavy decorator frameworks.
+- **Database Integrity:** Enforce data invariants at the database level using foreign keys, unique constraints, `NOT NULL` rules, and ACID transactions rather than duplicating defensive checks in application code.
+- **Testing Strategy:** Favor fast integration tests against an isolated test database for endpoints and queries. Reserve unit tests for pure, logic-heavy service functions and edge cases.
+- **Feature Scope:** Implementing a standard feature should require changes in at most three places:
+  1. `src/db/` (schema or migration, if needed)
+  2. `src/services/` (business logic, if non-trivial)
+  3. `src/routes/` (endpoint, input validation, and safe response shaping)

@@ -1,28 +1,39 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { MiddlewareHandler } from 'hono';
-import type { TodolistCommands } from '../../application/commands/todolist.commands.js';
-import type { TodolistQueries } from '../../application/queries/todolist.queries.js';
+import type { TodolistAttributes } from '../db/index.js';
 import {
-  BulkDeleteRequestDTO,
-  BulkDeleteResponseDTO,
-  CreateTodolistBodyDTO,
-  CreateTodolistRequestDTO,
-  DeleteByIdResponseDTO,
-  ErrorResponseDTO,
-  IdParamDTO,
-  PaginatedTodolistResponseDTO,
-  SingleTodolistMutationResponseDTO,
-  SingleTodolistResponseDTO,
-  TodolistMutationResponseDTO,
-  TodolistQueryDTO,
-  UpdateTodolistBodyDTO,
-} from '../dtos.js';
-import { toPaginatedTodolistResponseDTO, toTodolistResponseDTO } from '../mappers.js';
+  createTodolists,
+  deleteTodolistById,
+  deleteTodolists,
+  getTodolistById,
+  listTodolists,
+  updateTodolists,
+} from '../services/todolist.service.js';
+import { authMiddleware, createOpenAPIRouter, extractBulkDeleteIds } from './middlewares.js';
 import {
-  createOpenAPIRouter,
-  extractBulkDeleteIds,
-  type AppEnv,
-} from '../middlewares.js';
+  BulkDeleteBodySchema,
+  BulkDeleteResponseSchema,
+  CreateTodolistBodySchema,
+  CreateTodolistRequestSchema,
+  DeleteByIdResponseSchema,
+  ErrorResponseSchema,
+  IdParamSchema,
+  PaginatedTodolistResponseSchema,
+  SingleTodolistMutationResponseSchema,
+  SingleTodolistResponseSchema,
+  TodolistMutationResponseSchema,
+  TodolistQuerySchema,
+  UpdateTodolistBodySchema,
+} from './schemas.js';
+
+function shapeTodolist(item: TodolistAttributes) {
+  return {
+    id: item.id,
+    userId: item.userId,
+    title: item.title,
+    createdAt: new Date(item.createdAt).toISOString(),
+    updatedAt: new Date(item.updatedAt).toISOString(),
+  };
+}
 
 const getTodolistsRoute = createRoute({
   method: 'get',
@@ -31,19 +42,19 @@ const getTodolistsRoute = createRoute({
   tags: ['Todolist'],
   summary: 'Get paginated todolists (bulk)',
   security: [{ BearerAuth: [] }],
-  request: { query: TodolistQueryDTO },
+  request: { query: TodolistQuerySchema },
   responses: {
     200: {
       description: 'Paginated list of todolists',
-      content: { 'application/json': { schema: PaginatedTodolistResponseDTO } },
+      content: { 'application/json': { schema: PaginatedTodolistResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -58,21 +69,21 @@ const createTodolistRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: CreateTodolistBodyDTO } },
+      content: { 'application/json': { schema: CreateTodolistBodySchema } },
     },
   },
   responses: {
     201: {
       description: 'Todolist(s) created successfully',
-      content: { 'application/json': { schema: TodolistMutationResponseDTO } },
+      content: { 'application/json': { schema: TodolistMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -87,25 +98,25 @@ const patchTodolistsRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: UpdateTodolistBodyDTO } },
+      content: { 'application/json': { schema: UpdateTodolistBodySchema } },
     },
   },
   responses: {
     200: {
       description: 'Todolist(s) updated successfully',
-      content: { 'application/json': { schema: TodolistMutationResponseDTO } },
+      content: { 'application/json': { schema: TodolistMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -120,21 +131,21 @@ const deleteTodolistsRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: BulkDeleteRequestDTO } },
+      content: { 'application/json': { schema: BulkDeleteBodySchema } },
     },
   },
   responses: {
     200: {
       description: 'Todolist(s) deleted successfully',
-      content: { 'application/json': { schema: BulkDeleteResponseDTO } },
+      content: { 'application/json': { schema: BulkDeleteResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -146,23 +157,23 @@ const getTodolistByIdRoute = createRoute({
   tags: ['Todolist'],
   summary: 'Get single todolist by ID',
   security: [{ BearerAuth: [] }],
-  request: { params: IdParamDTO },
+  request: { params: IdParamSchema },
   responses: {
     200: {
       description: 'Todolist found',
-      content: { 'application/json': { schema: SingleTodolistResponseDTO } },
+      content: { 'application/json': { schema: SingleTodolistResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -175,28 +186,28 @@ const patchTodolistByIdRoute = createRoute({
   summary: 'Update single todolist by URL ID',
   security: [{ BearerAuth: [] }],
   request: {
-    params: IdParamDTO,
+    params: IdParamSchema,
     body: {
       required: true,
-      content: { 'application/json': { schema: CreateTodolistRequestDTO } },
+      content: { 'application/json': { schema: CreateTodolistRequestSchema } },
     },
   },
   responses: {
     200: {
       description: 'Todolist updated successfully',
-      content: { 'application/json': { schema: SingleTodolistMutationResponseDTO } },
+      content: { 'application/json': { schema: SingleTodolistMutationResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -208,32 +219,28 @@ const deleteTodolistByIdRoute = createRoute({
   tags: ['Todolist'],
   summary: 'Delete single todolist by URL ID',
   security: [{ BearerAuth: [] }],
-  request: { params: IdParamDTO },
+  request: { params: IdParamSchema },
   responses: {
     200: {
       description: 'Todolist deleted successfully',
-      content: { 'application/json': { schema: DeleteByIdResponseDTO } },
+      content: { 'application/json': { schema: DeleteByIdResponseSchema } },
     },
     400: {
       description: 'Bad Request / Validation Failure',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Unauthorized / Missing or Invalid JWT Token',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Resource Not Found',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-export function createTodolistRoutes(
-  authMiddleware: MiddlewareHandler<AppEnv>,
-  commands: TodolistCommands,
-  queries: TodolistQueries,
-) {
+export function createTodolistRoutes() {
   const router = createOpenAPIRouter();
   router.use('*', authMiddleware);
 
@@ -241,36 +248,42 @@ export function createTodolistRoutes(
     .openapi(getTodolistsRoute, async (c) => {
       const userId = c.get('userId');
       const query = c.req.valid('query');
-      const result = await queries.list({
+      const result = await listTodolists({
         userId,
         page: query.page,
         limit: query.limit,
         search: query.search,
       });
-      return c.json(toPaginatedTodolistResponseDTO(result), 200);
+      return c.json(
+        {
+          data: result.data.map(shapeTodolist),
+          pagination: result.pagination,
+        },
+        200,
+      );
     })
     .openapi(createTodolistRoute, async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
 
       if (Array.isArray(body)) {
-        const created = await commands.createBulk(userId, body);
+        const created = await createTodolists(userId, body);
         return c.json(
-          { message: 'Todolists created successfully', data: created.map(toTodolistResponseDTO) },
+          { message: 'Todolists created successfully', data: created.map(shapeTodolist) },
           201,
         );
       }
       if ('items' in body) {
-        const created = await commands.createBulk(userId, body.items);
+        const created = await createTodolists(userId, body.items);
         return c.json(
-          { message: 'Todolists created successfully', data: created.map(toTodolistResponseDTO) },
+          { message: 'Todolists created successfully', data: created.map(shapeTodolist) },
           201,
         );
       }
 
-      const created = await commands.createSingle(userId, body);
+      const [created] = await createTodolists(userId, [body]);
       return c.json(
-        { message: 'Todolist created successfully', data: toTodolistResponseDTO(created) },
+        { message: 'Todolist created successfully', data: shapeTodolist(created) },
         201,
       );
     })
@@ -279,23 +292,23 @@ export function createTodolistRoutes(
       const body = c.req.valid('json');
 
       if (Array.isArray(body)) {
-        const updated = await commands.updateBulk(userId, body);
+        const updated = await updateTodolists(userId, body);
         return c.json(
-          { message: 'Todolists updated successfully', data: updated.map(toTodolistResponseDTO) },
+          { message: 'Todolists updated successfully', data: updated.map(shapeTodolist) },
           200,
         );
       }
 
-      const updated = await commands.updateSingle(userId, body);
+      const [updated] = await updateTodolists(userId, [body]);
       return c.json(
-        { message: 'Todolist updated successfully', data: toTodolistResponseDTO(updated) },
+        { message: 'Todolist updated successfully', data: shapeTodolist(updated) },
         200,
       );
     })
     .openapi(deleteTodolistsRoute, async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
-      const result = await commands.deleteMany(userId, extractBulkDeleteIds(body));
+      const result = await deleteTodolists(userId, extractBulkDeleteIds(body));
       return c.json(
         {
           message: 'Todolist(s) deleted successfully',
@@ -308,23 +321,23 @@ export function createTodolistRoutes(
     .openapi(getTodolistByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
-      const todolist = await queries.getById(userId, id);
-      return c.json({ data: toTodolistResponseDTO(todolist) }, 200);
+      const todolist = await getTodolistById(userId, id);
+      return c.json({ data: shapeTodolist(todolist) }, 200);
     })
     .openapi(patchTodolistByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      const updated = await commands.updateSingle(userId, { id, title: body.title });
+      const [updated] = await updateTodolists(userId, [{ id, title: body.title }]);
       return c.json(
-        { message: 'Todolist updated successfully', data: toTodolistResponseDTO(updated) },
+        { message: 'Todolist updated successfully', data: shapeTodolist(updated) },
         200,
       );
     })
     .openapi(deleteTodolistByIdRoute, async (c) => {
       const userId = c.get('userId');
       const { id } = c.req.valid('param');
-      const deletedId = await commands.deleteById(userId, id);
+      const deletedId = await deleteTodolistById(userId, id);
       return c.json({ message: 'Todolist deleted successfully', id: deletedId }, 200);
     });
 }

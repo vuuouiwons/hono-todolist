@@ -1,13 +1,22 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { AuthCommands } from '../../application/commands/auth.commands.js';
+import type { UserAttributes } from '../db/index.js';
+import { loginUser, registerUser } from '../services/auth.service.js';
+import { createOpenAPIRouter } from './middlewares.js';
 import {
-  AuthRequestDTO,
-  ErrorResponseDTO,
-  LoginResponseDTO,
-  RegisterResponseDTO,
-} from '../dtos.js';
-import { toUserResponseDTO } from '../mappers.js';
-import { createOpenAPIRouter } from '../middlewares.js';
+  AuthRequestSchema,
+  ErrorResponseSchema,
+  LoginResponseSchema,
+  RegisterResponseSchema,
+} from './schemas.js';
+
+// Controller boundary shaper: explicitly strips sensitive fields like passwordHash
+function shapeUser(user: UserAttributes) {
+  return {
+    id: user.id,
+    email: user.email,
+    createdAt: new Date(user.createdAt).toISOString(),
+  };
+}
 
 const registerRoute = createRoute({
   method: 'post',
@@ -18,21 +27,21 @@ const registerRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: AuthRequestDTO } },
+      content: { 'application/json': { schema: AuthRequestSchema } },
     },
   },
   responses: {
     201: {
       description: 'User registered successfully',
-      content: { 'application/json': { schema: RegisterResponseDTO } },
+      content: { 'application/json': { schema: RegisterResponseSchema } },
     },
     400: {
       description: 'Invalid input format or validation error',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
       description: 'Email already exists',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -46,46 +55,46 @@ const loginRoute = createRoute({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: AuthRequestDTO } },
+      content: { 'application/json': { schema: AuthRequestSchema } },
     },
   },
   responses: {
     200: {
       description: 'Login successful',
-      content: { 'application/json': { schema: LoginResponseDTO } },
+      content: { 'application/json': { schema: LoginResponseSchema } },
     },
     400: {
       description: 'Invalid input format or validation error',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     401: {
       description: 'Invalid credentials',
-      content: { 'application/json': { schema: ErrorResponseDTO } },
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-export function createAuthRoutes(authCommands: AuthCommands) {
+export function createAuthRoutes() {
   return createOpenAPIRouter()
     .openapi(registerRoute, async (c) => {
       const body = c.req.valid('json');
-      const user = await authCommands.register(body);
+      const user = await registerUser(body);
       return c.json(
         {
           message: 'User registered successfully',
-          data: toUserResponseDTO(user),
+          data: shapeUser(user),
         },
         201,
       );
     })
     .openapi(loginRoute, async (c) => {
       const body = c.req.valid('json');
-      const result = await authCommands.login(body);
+      const result = await loginUser(body);
       return c.json(
         {
           message: 'Login successful',
           token: result.token,
-          data: toUserResponseDTO(result.user),
+          data: shapeUser(result.user),
         },
         200,
       );

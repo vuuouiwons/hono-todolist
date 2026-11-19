@@ -10,18 +10,16 @@ import { prettyJSON } from 'hono/pretty-json';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import { endTime, startTime, timing } from 'hono/timing';
+import { createAuthRoutes } from './routes/auth.routes.js';
 import {
-  createAuthMiddleware,
   createOpenAPIRouter,
-  createTransactionMiddleware,
   globalErrorHandler,
   globalNotFoundHandler,
+  transactionMiddleware,
   type AppEnv,
-} from './api/middlewares.js';
-import { createAuthRoutes } from './api/routes/auth.routes.js';
-import { createTodoRoutes } from './api/routes/todo.routes.js';
-import { createTodolistRoutes } from './api/routes/todolist.routes.js';
-import type { AppContainer } from './container.js';
+} from './routes/middlewares.js';
+import { createTodoRoutes } from './routes/todo.routes.js';
+import { createTodolistRoutes } from './routes/todolist.routes.js';
 
 export interface CreateAppOptions {
   enableLogger?: boolean;
@@ -35,13 +33,13 @@ function getRequestMetadataFromContextStorage() {
   };
 }
 
-export function createApp(container: AppContainer, options: CreateAppOptions = {}) {
+export function createApp(options: CreateAppOptions = {}) {
   const app = createOpenAPIRouter();
 
   app.onError(globalErrorHandler);
   app.notFound(globalNotFoundHandler);
 
-  // Built-in Hono middleware showcase
+  // Built-in Hono middlewares
   app.use('*', requestId());
   app.use('*', timing());
   app.use('*', contextStorage());
@@ -50,7 +48,6 @@ export function createApp(container: AppContainer, options: CreateAppOptions = {
     app.use('*', logger());
   }
 
-  // Track handler processing time via Server-Timing header
   app.use('/api/*', async (c, next) => {
     startTime(c, 'handler');
     await next();
@@ -61,7 +58,7 @@ export function createApp(container: AppContainer, options: CreateAppOptions = {
   app.use('/api/*', cors());
   app.use('/api/*', prettyJSON());
   app.use('/api/*', etag());
-  app.use('/api/*', createTransactionMiddleware(container.transactor));
+  app.use('/api/*', transactionMiddleware);
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'BearerAuth', {
     type: 'http',
@@ -70,31 +67,17 @@ export function createApp(container: AppContainer, options: CreateAppOptions = {
     description: 'Enter JWT token obtained from /api/v1/login',
   });
 
-  const authMiddleware = createAuthMiddleware(container.commands.auth);
-
-  const authRoutes = createAuthRoutes(container.commands.auth);
-  const todolistRoutes = createTodolistRoutes(
-    authMiddleware,
-    container.commands.todolist,
-    container.queries.todolist,
-  );
-  const todoRoutes = createTodoRoutes(
-    authMiddleware,
-    container.commands.todo,
-    container.queries.todo,
-  );
-
   const api = app
-    .route('/api/v1', authRoutes)
-    .route('/api/v1/todolist', todolistRoutes)
-    .route('/api/v1/todo', todoRoutes);
+    .route('/api/v1', createAuthRoutes())
+    .route('/api/v1/todolist', createTodolistRoutes())
+    .route('/api/v1/todo', createTodoRoutes());
 
   api.doc('/openapi.json', {
     openapi: '3.0.3',
     info: {
-      title: 'Hono Pragmatic Layered Todo API',
+      title: 'Hono Pragmatic 3-Layer Todo API',
       description:
-        'Pragmatic 3-Layer RESTful API (API -> Application <- Infrastructure) for Todo and Todolist management built with Hono, Zod OpenAPI, and Sequelize ORM.',
+        'Pragmatic 3-Layer RESTful API (Routes -> Services -> DB) for Todo and Todolist management built with Hono, Zod OpenAPI, and Sequelize ORM.',
       version: '1.0.0',
     },
     servers: [
@@ -118,12 +101,13 @@ export function createApp(container: AppContainer, options: CreateAppOptions = {
           status: 'ok',
           framework: 'Hono',
           orm: 'Sequelize (SQLite)',
-          architecture: 'Pragmatic Layered Architecture (API -> Application <- Infrastructure)',
+          architecture: 'Pragmatic 3-Layer Architecture (Routes -> Services -> DB)',
           requestId: meta.requestId,
           capabilities: [
             'OpenAPIHono + Zod validation (@hono/zod-openapi)',
             'End-to-end typed RPC client (hono/client)',
             'Built-in JWT auth (hono/jwt + createMiddleware)',
+            'CLS-backed Sequelize transactionMiddleware (AsyncLocalStorage)',
             'Built-in Request ID, Server-Timing, ETag, PrettyJSON, CORS, Secure Headers, ContextStorage',
             'Interactive Scalar (/docs) & Swagger UI (/swagger)',
           ],

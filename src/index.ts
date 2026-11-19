@@ -1,15 +1,14 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
-import { createContainer } from './container.js';
+import { closeDb, initDb } from './db/index.js';
 
 async function bootstrap() {
   const port = Number(process.env.PORT ?? 8080);
-  const container = await createContainer({
-    dbStorage: process.env.DB_STORAGE ?? './data/todo.sqlite',
-    jwtSecret: process.env.JWT_SECRET,
+  await initDb({
+    storage: process.env.DB_STORAGE ?? './data/todo.sqlite',
   });
 
-  const app = createApp(container);
+  const app = createApp();
 
   const server = serve(
     {
@@ -27,7 +26,7 @@ async function bootstrap() {
   const shutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}, shutting down gracefully...`);
     server.close(async () => {
-      await container.close();
+      await closeDb();
       process.exit(0);
     });
   };
