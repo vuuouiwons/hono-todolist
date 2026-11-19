@@ -185,25 +185,38 @@ describe('Integration Tests: Hono 3-Layer Todo API (Isolated SQLite)', () => {
         'Groceries Updated',
       );
 
-      // Delete by URL ID and all 3 body formats
+      // Delete by URL ID
       expect(
         (await app.request(`/api/v1/todolist/${firstId}`, { method: 'DELETE', headers })).status,
       ).toBe(200);
 
-      const delBodyObj = await app.request('/api/v1/todolist', {
+      // Rejects non-{ ids: [...] } body formats with 400
+      const invalidDelArr = await app.request('/api/v1/todolist', {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify([secondId]),
+      });
+      expect(invalidDelArr.status).toBe(400);
+
+      const invalidDelSingle = await app.request('/api/v1/todolist', {
         method: 'DELETE',
         headers,
         body: JSON.stringify({ id: secondId }),
       });
-      expect(await delBodyObj.json()).toMatchObject({ deletedCount: 1, requestedIDs: [secondId] });
+      expect(invalidDelSingle.status).toBe(400);
 
-      const remainingIds = searchBody.data.map((d) => d.id).filter((id) => id !== secondId);
-      const delBodyArr = await app.request('/api/v1/todolist', {
+      // Bulk delete strictly using { ids: [...] }
+      const remainingIds = searchBody.data.map((d) => d.id);
+      const delBody = await app.request('/api/v1/todolist', {
         method: 'DELETE',
         headers,
-        body: JSON.stringify(remainingIds),
+        body: JSON.stringify({ ids: remainingIds }),
       });
-      expect(await delBodyArr.json()).toMatchObject({ deletedCount: remainingIds.length });
+      expect(delBody.status).toBe(200);
+      expect(await delBody.json()).toMatchObject({
+        deletedCount: remainingIds.length,
+        requestedIDs: remainingIds,
+      });
     });
   });
 

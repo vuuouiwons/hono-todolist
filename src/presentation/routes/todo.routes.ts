@@ -120,7 +120,7 @@ const deleteTodosRoute = createRoute({
   path: '/',
   operationId: 'deleteTodos',
   tags: ['Todo'],
-  summary: 'Delete todos (single or bulk via body strictly)',
+  summary: 'Delete todos in bulk by IDs',
   security: [{ BearerAuth: [] }],
   request: {
     body: {

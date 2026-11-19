@@ -51,11 +51,11 @@ export const PaginationQuerySchema = z.object({
 
 export const PositiveIntIdSchema = z.number().int().positive();
 
-export const BulkDeleteBodySchema = z.union([
-  z.array(PositiveIntIdSchema).min(1).openapi({ example: [1, 2, 3] }),
-  z.object({ id: PositiveIntIdSchema.openapi({ example: 1 }) }),
-  z.object({ ids: z.array(PositiveIntIdSchema).min(1).openapi({ example: [1, 2, 3] }) }),
-]);
+export const BulkDeleteBodySchema = z
+  .object({
+    ids: z.array(PositiveIntIdSchema).min(1).openapi({ example: [1, 2, 3] }),
+  })
+  .openapi('BulkDeleteRequest');
 
 export const BulkDeleteResponseSchema = z.object({
   message: z.string().openapi({ example: 'Items deleted successfully' }),

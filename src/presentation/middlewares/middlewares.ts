@@ -34,12 +34,6 @@ export function createOpenAPIRouter() {
 }
 
 export function extractBulkDeleteIds(body: z.infer<typeof BulkDeleteBodySchema>): number[] {
-  if (Array.isArray(body)) {
-    return body;
-  }
-  if ('id' in body) {
-    return [body.id];
-  }
   return body.ids;
 }
 

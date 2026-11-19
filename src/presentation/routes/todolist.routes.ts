@@ -120,7 +120,7 @@ const deleteTodolistsRoute = createRoute({
   path: '/',
   operationId: 'deleteTodolists',
   tags: ['Todolist'],
-  summary: 'Delete todolists (single or bulk via body strictly)',
+  summary: 'Delete todolists in bulk by IDs',
   security: [{ BearerAuth: [] }],
   request: {
     body: {

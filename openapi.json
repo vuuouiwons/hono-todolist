@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Go Gin Todo API",
-    "description": "Clean Architecture RESTful API for Todo and Todolist management with JWT authentication and URI versioning.",
+    "title": "Hono 3-Layer Todo API",
+    "description": "3-Layer RESTful API (Presentation -> Business -> Data) for Todo and Todolist management built with Hono, Zod OpenAPI, and Sequelize ORM.",
     "version": "1.0.0"
   },
   "servers": [
@@ -25,12 +25,357 @@
       "description": "Todo CRUD operations (single and bulk)"
     }
   ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT token obtained from /api/v1/login"
+      }
+    },
+    "schemas": {
+      "RegisterResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "User registered successfully"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "required": [
+          "message",
+          "data"
+        ]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-18T03:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "createdAt"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Error message description"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "AuthRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "example": "securepassword123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Login successful"
+          },
+          "token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "required": [
+          "message",
+          "token",
+          "data"
+        ]
+      },
+      "PaginatedTodolistResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Todolist"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ]
+      },
+      "Todolist": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "userId": {
+            "type": "integer",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "example": "Work Tasks"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 10
+          },
+          "totalItems": {
+            "type": "integer",
+            "example": 25
+          },
+          "totalPages": {
+            "type": "integer",
+            "example": 3
+          },
+          "hasNext": {
+            "type": "boolean",
+            "example": true
+          },
+          "hasPrev": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "totalItems",
+          "totalPages",
+          "hasNext",
+          "hasPrev"
+        ]
+      },
+      "CreateTodolistRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "example": "Work Tasks"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdateTodolistRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "example": "Work Tasks Updated"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ]
+      },
+      "BulkDeleteRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "minItems": 1,
+            "example": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "PaginatedTodoResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Todo"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ]
+      },
+      "Todo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "userId": {
+            "type": "integer",
+            "example": 1
+          },
+          "message": {
+            "type": "string",
+            "example": "Buy groceries"
+          },
+          "check": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "message",
+          "check",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateTodoRequest": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "example": "Buy groceries"
+          },
+          "check": {
+            "type": "boolean",
+            "default": false,
+            "example": false
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "UpdateTodoRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "example": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "example": "Updated message"
+          },
+          "check": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "parameters": {}
+  },
   "paths": {
     "/api/v1/register": {
       "post": {
-        "tags": ["Auth"],
-        "summary": "Register a new user",
         "operationId": "registerUser",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new user",
         "requestBody": {
           "required": true,
           "content": {
@@ -77,9 +422,11 @@
     },
     "/api/v1/login": {
       "post": {
-        "tags": ["Auth"],
-        "summary": "Authenticate user and receive JWT",
         "operationId": "loginUser",
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Authenticate user and receive JWT",
         "requestBody": {
           "required": true,
           "content": {
@@ -101,6 +448,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid input format or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Invalid credentials",
             "content": {
@@ -116,28 +473,54 @@
     },
     "/api/v1/todolist": {
       "get": {
-        "tags": ["Todolist"],
-        "summary": "Get paginated todolists (bulk)",
         "operationId": "getTodolists",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Get paginated todolists (bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Page number (1-based)",
+              "example": 1
+            },
+            "required": false,
             "description": "Page number (1-based)",
-            "schema": { "type": "integer", "default": 1 }
+            "name": "page",
+            "in": "query"
           },
           {
-            "name": "limit",
-            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "description": "Number of items per page",
+              "example": 10
+            },
+            "required": false,
             "description": "Number of items per page",
-            "schema": { "type": "integer", "default": 10 }
+            "name": "limit",
+            "in": "query"
           },
           {
-            "name": "search",
-            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "Filter by list title",
+              "example": "Work"
+            },
+            "required": false,
             "description": "Filter by list title",
-            "schema": { "type": "string" }
+            "name": "search",
+            "in": "query"
           }
         ],
         "responses": {
@@ -151,48 +534,71 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "post": {
-        "tags": ["Todolist"],
-        "summary": "Create todolist (single or bulk)",
         "operationId": "createTodolist",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Create todolist (single or bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/CreateTodolistRequest" },
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateTodolistRequest"
+                  },
                   {
                     "type": "array",
-                    "items": { "$ref": "#/components/schemas/CreateTodolistRequest" }
+                    "items": {
+                      "$ref": "#/components/schemas/CreateTodolistRequest"
+                    },
+                    "minItems": 1
                   },
                   {
                     "type": "object",
                     "properties": {
                       "items": {
                         "type": "array",
-                        "items": { "$ref": "#/components/schemas/CreateTodolistRequest" }
+                        "items": {
+                          "$ref": "#/components/schemas/CreateTodolistRequest"
+                        },
+                        "minItems": 1
                       }
-                    }
+                    },
+                    "required": [
+                      "items"
+                    ]
                   }
                 ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Create single todolist",
-                  "value": { "title": "Groceries" }
-                },
-                "bulk": {
-                  "summary": "Create multiple todolists",
-                  "value": [
-                    { "title": "Groceries" },
-                    { "title": "Work Tasks" }
-                  ]
-                }
               }
             }
           }
@@ -205,55 +611,81 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
-                      "oneOf": [
-                        { "$ref": "#/components/schemas/Todolist" },
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Todolist"
+                        },
                         {
                           "type": "array",
-                          "items": { "$ref": "#/components/schemas/Todolist" }
+                          "items": {
+                            "$ref": "#/components/schemas/Todolist"
+                          }
                         }
                       ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "patch": {
-        "tags": ["Todolist"],
-        "summary": "Update todolists by ID (single or bulk)",
         "operationId": "patchTodolists",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Update todolists by ID (single or bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/UpdateTodolistRequest" },
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateTodolistRequest"
+                  },
                   {
                     "type": "array",
-                    "items": { "$ref": "#/components/schemas/UpdateTodolistRequest" }
+                    "items": {
+                      "$ref": "#/components/schemas/UpdateTodolistRequest"
+                    },
+                    "minItems": 1
                   }
                 ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Update single by ID in body",
-                  "value": { "id": 1, "title": "Updated Title" }
-                },
-                "bulk": {
-                  "summary": "Update multiple by ID in body",
-                  "value": [
-                    { "id": 1, "title": "Updated List 1" },
-                    { "id": 2, "title": "Updated List 2" }
-                  ]
-                }
               }
             }
           }
@@ -266,66 +698,80 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
-                      "oneOf": [
-                        { "$ref": "#/components/schemas/Todolist" },
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Todolist"
+                        },
                         {
                           "type": "array",
-                          "items": { "$ref": "#/components/schemas/Todolist" }
+                          "items": {
+                            "$ref": "#/components/schemas/Todolist"
+                          }
                         }
                       ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
-        "tags": ["Todolist"],
-        "summary": "Delete todolists (single or bulk via body strictly)",
         "operationId": "deleteTodolists",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Delete todolists in bulk by IDs",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": { "type": "integer" }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "integer" },
-                      "ids": {
-                        "type": "array",
-                        "items": { "type": "integer" }
-                      }
-                    }
-                  }
-                ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Delete single by body",
-                  "value": { "id": 1 }
-                },
-                "bulkArray": {
-                  "summary": "Delete multiple by ID array",
-                  "value": [1, 2, 3]
-                },
-                "bulkObject": {
-                  "summary": "Delete multiple by IDs object",
-                  "value": { "ids": [1, 2, 3] }
-                }
+                "$ref": "#/components/schemas/BulkDeleteRequest"
               }
             }
           }
@@ -338,34 +784,80 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "deletedCount": { "type": "integer" },
+                    "message": {
+                      "type": "string",
+                      "example": "Items deleted successfully"
+                    },
+                    "deletedCount": {
+                      "type": "integer",
+                      "example": 2
+                    },
                     "requestedIDs": {
                       "type": "array",
-                      "items": { "type": "integer" }
+                      "items": {
+                        "type": "integer"
+                      },
+                      "example": [
+                        1,
+                        2
+                      ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "deletedCount",
+                    "requestedIDs"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/v1/todolist/{id}": {
       "get": {
-        "tags": ["Todolist"],
-        "summary": "Get single todolist by ID",
         "operationId": "getTodolistByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Get single todolist by ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "responses": {
@@ -376,27 +868,71 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Todolist" }
-                  }
+                    "data": {
+                      "$ref": "#/components/schemas/Todolist"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "patch": {
-        "tags": ["Todolist"],
-        "summary": "Update single todolist by URL ID",
         "operationId": "patchTodolistByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Update single todolist by URL ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "requestBody": {
@@ -417,29 +953,75 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "data": { "$ref": "#/components/schemas/Todolist" }
-                  }
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Todolist"
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
-        "tags": ["Todolist"],
-        "summary": "Delete single todolist by URL ID",
         "operationId": "deleteTodolistByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todolist"
+        ],
+        "summary": "Delete single todolist by URL ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "responses": {
@@ -450,48 +1032,117 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "id": { "type": "integer" }
-                  }
+                    "message": {
+                      "type": "string",
+                      "example": "Item deleted successfully"
+                    },
+                    "id": {
+                      "type": "integer",
+                      "example": 1
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "id"
+                  ]
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/v1/todo": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "Get paginated todos (bulk)",
         "operationId": "getTodos",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Get paginated todos (bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Page number (1-based)",
+              "example": 1
+            },
+            "required": false,
             "description": "Page number (1-based)",
-            "schema": { "type": "integer", "default": 1 }
+            "name": "page",
+            "in": "query"
           },
           {
-            "name": "limit",
-            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "description": "Number of items per page",
+              "example": 10
+            },
+            "required": false,
             "description": "Number of items per page",
-            "schema": { "type": "integer", "default": 10 }
+            "name": "limit",
+            "in": "query"
           },
           {
-            "name": "search",
-            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "Filter by message content",
+              "example": "groceries"
+            },
+            "required": false,
             "description": "Filter by message content",
-            "schema": { "type": "string" }
+            "name": "search",
+            "in": "query"
           },
           {
-            "name": "check",
-            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "description": "Filter by completed check status",
+              "example": false
+            },
+            "required": false,
             "description": "Filter by completed check status",
-            "schema": { "type": "boolean" }
+            "name": "check",
+            "in": "query"
           }
         ],
         "responses": {
@@ -505,39 +1156,56 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "post": {
-        "tags": ["Todo"],
-        "summary": "Create todo (single or bulk)",
         "operationId": "createTodo",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Create todo (single or bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/CreateTodoRequest" },
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateTodoRequest"
+                  },
                   {
                     "type": "array",
-                    "items": { "$ref": "#/components/schemas/CreateTodoRequest" }
+                    "items": {
+                      "$ref": "#/components/schemas/CreateTodoRequest"
+                    },
+                    "minItems": 1
                   }
                 ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Create single todo",
-                  "value": { "message": "Buy groceries", "check": false }
-                },
-                "bulk": {
-                  "summary": "Create multiple todos",
-                  "value": [
-                    { "message": "Buy groceries", "check": false },
-                    { "message": "Review pull request", "check": true }
-                  ]
-                }
               }
             }
           }
@@ -550,55 +1218,81 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
-                      "oneOf": [
-                        { "$ref": "#/components/schemas/Todo" },
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Todo"
+                        },
                         {
                           "type": "array",
-                          "items": { "$ref": "#/components/schemas/Todo" }
+                          "items": {
+                            "$ref": "#/components/schemas/Todo"
+                          }
                         }
                       ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "patch": {
-        "tags": ["Todo"],
-        "summary": "Update todos by ID (single or bulk)",
         "operationId": "patchTodos",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Update todos by ID (single or bulk)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/UpdateTodoRequest" },
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateTodoRequest"
+                  },
                   {
                     "type": "array",
-                    "items": { "$ref": "#/components/schemas/UpdateTodoRequest" }
+                    "items": {
+                      "$ref": "#/components/schemas/UpdateTodoRequest"
+                    },
+                    "minItems": 1
                   }
                 ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Update single by ID in body",
-                  "value": { "id": 1, "check": true }
-                },
-                "bulk": {
-                  "summary": "Update multiple by ID in body",
-                  "value": [
-                    { "id": 1, "check": true },
-                    { "id": 2, "message": "Updated task message" }
-                  ]
-                }
               }
             }
           }
@@ -611,66 +1305,80 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
-                      "oneOf": [
-                        { "$ref": "#/components/schemas/Todo" },
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Todo"
+                        },
                         {
                           "type": "array",
-                          "items": { "$ref": "#/components/schemas/Todo" }
+                          "items": {
+                            "$ref": "#/components/schemas/Todo"
+                          }
                         }
                       ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
-        "tags": ["Todo"],
-        "summary": "Delete todos (single or bulk via body strictly)",
         "operationId": "deleteTodos",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Delete todos in bulk by IDs",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": { "type": "integer" }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "integer" },
-                      "ids": {
-                        "type": "array",
-                        "items": { "type": "integer" }
-                      }
-                    }
-                  }
-                ]
-              },
-              "examples": {
-                "single": {
-                  "summary": "Delete single by body",
-                  "value": { "id": 1 }
-                },
-                "bulkArray": {
-                  "summary": "Delete multiple by ID array",
-                  "value": [1, 2, 3]
-                },
-                "bulkObject": {
-                  "summary": "Delete multiple by IDs object",
-                  "value": { "ids": [1, 2, 3] }
-                }
+                "$ref": "#/components/schemas/BulkDeleteRequest"
               }
             }
           }
@@ -683,34 +1391,80 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "deletedCount": { "type": "integer" },
+                    "message": {
+                      "type": "string",
+                      "example": "Items deleted successfully"
+                    },
+                    "deletedCount": {
+                      "type": "integer",
+                      "example": 2
+                    },
                     "requestedIDs": {
                       "type": "array",
-                      "items": { "type": "integer" }
+                      "items": {
+                        "type": "integer"
+                      },
+                      "example": [
+                        1,
+                        2
+                      ]
                     }
-                  }
+                  },
+                  "required": [
+                    "message",
+                    "deletedCount",
+                    "requestedIDs"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/api/v1/todo/{id}": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "Get single todo by ID",
         "operationId": "getTodoByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Get single todo by ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "responses": {
@@ -721,27 +1475,71 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Todo" }
-                  }
+                    "data": {
+                      "$ref": "#/components/schemas/Todo"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "patch": {
-        "tags": ["Todo"],
-        "summary": "Update single todo by URL ID",
         "operationId": "patchTodoByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Update single todo by URL ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "requestBody": {
@@ -751,8 +1549,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "message": { "type": "string" },
-                  "check": { "type": "boolean" }
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "example": "Updated message"
+                  },
+                  "check": {
+                    "type": "boolean",
+                    "example": true
+                  }
                 }
               }
             }
@@ -766,29 +1571,75 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "data": { "$ref": "#/components/schemas/Todo" }
-                  }
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Todo"
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "data"
+                  ]
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
-        "tags": ["Todo"],
-        "summary": "Delete single todo by URL ID",
         "operationId": "deleteTodoByID",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Todo"
+        ],
+        "summary": "Delete single todo by URL ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true,
+              "example": 1
+            },
             "required": true,
-            "schema": { "type": "integer" }
+            "name": "id",
+            "in": "path"
           }
         ],
         "responses": {
@@ -799,181 +1650,52 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "id": { "type": "integer" }
-                  }
+                    "message": {
+                      "type": "string",
+                      "example": "Item deleted successfully"
+                    },
+                    "id": {
+                      "type": "integer",
+                      "example": 1
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "id"
+                  ]
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" }
-        }
-      }
-    }
-  },
-  "components": {
-    "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "Enter JWT token obtained from /api/v1/login"
-      }
-    },
-    "schemas": {
-      "AuthRequest": {
-        "type": "object",
-        "required": ["email", "password"],
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "user@example.com"
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
-          "password": {
-            "type": "string",
-            "minLength": 6,
-            "example": "securepassword123"
-          }
-        }
-      },
-      "UserResponse": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "email": { "type": "string", "example": "user@example.com" },
-          "createdAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "RegisterResponse": {
-        "type": "object",
-        "properties": {
-          "message": { "type": "string", "example": "User registered successfully" },
-          "data": { "$ref": "#/components/schemas/UserResponse" }
-        }
-      },
-      "LoginResponse": {
-        "type": "object",
-        "properties": {
-          "message": { "type": "string", "example": "Login successful" },
-          "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsIn..." },
-          "data": { "$ref": "#/components/schemas/UserResponse" }
-        }
-      },
-      "Todolist": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "userId": { "type": "integer", "example": 1 },
-          "title": { "type": "string", "example": "Work Tasks" },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "CreateTodolistRequest": {
-        "type": "object",
-        "required": ["title"],
-        "properties": {
-          "title": { "type": "string", "example": "Work Tasks" }
-        }
-      },
-      "UpdateTodolistRequest": {
-        "type": "object",
-        "required": ["id", "title"],
-        "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "title": { "type": "string", "example": "Work Tasks Updated" }
-        }
-      },
-      "Todo": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "userId": { "type": "integer", "example": 1 },
-          "message": { "type": "string", "example": "Buy groceries" },
-          "check": { "type": "boolean", "example": false },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "CreateTodoRequest": {
-        "type": "object",
-        "required": ["message"],
-        "properties": {
-          "message": { "type": "string", "example": "Buy groceries" },
-          "check": { "type": "boolean", "default": false, "example": false }
-        }
-      },
-      "UpdateTodoRequest": {
-        "type": "object",
-        "required": ["id"],
-        "properties": {
-          "id": { "type": "integer", "example": 1 },
-          "message": { "type": "string", "example": "Updated message" },
-          "check": { "type": "boolean", "example": true }
-        }
-      },
-      "Pagination": {
-        "type": "object",
-        "properties": {
-          "page": { "type": "integer", "example": 1 },
-          "limit": { "type": "integer", "example": 10 },
-          "totalItems": { "type": "integer", "example": 25 },
-          "totalPages": { "type": "integer", "example": 3 },
-          "hasNext": { "type": "boolean", "example": true },
-          "hasPrev": { "type": "boolean", "example": false }
-        }
-      },
-      "PaginatedTodolistResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Todolist" }
+          "401": {
+            "description": "Unauthorized / Missing or Invalid JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
-          "pagination": { "$ref": "#/components/schemas/Pagination" }
-        }
-      },
-      "PaginatedTodoResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Todo" }
-          },
-          "pagination": { "$ref": "#/components/schemas/Pagination" }
-        }
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": { "type": "string", "example": "Error message description" }
-        }
-      }
-    },
-    "responses": {
-      "BadRequest": {
-        "description": "Bad Request / Validation Failure",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-          }
-        }
-      },
-      "Unauthorized": {
-        "description": "Unauthorized / Missing or Invalid JWT Token",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-          }
-        }
-      },
-      "NotFound": {
-        "description": "Resource Not Found",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          "404": {
+            "description": "Resource Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
