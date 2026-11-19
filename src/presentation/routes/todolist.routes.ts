@@ -1,5 +1,4 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { TodolistAttributes } from '../db/index.js';
 import {
   createTodolists,
   deleteTodolistById,
@@ -7,8 +6,8 @@ import {
   getTodolistById,
   listTodolists,
   updateTodolists,
-} from '../services/todolist.service.js';
-import { authMiddleware, createOpenAPIRouter, extractBulkDeleteIds } from './middlewares.js';
+} from '../../business/index.js';
+import { shapeTodolist } from '../controllers/todolist.controller.js';
 import {
   BulkDeleteBodySchema,
   BulkDeleteResponseSchema,
@@ -23,17 +22,12 @@ import {
   TodolistMutationResponseSchema,
   TodolistQuerySchema,
   UpdateTodolistBodySchema,
-} from './schemas.js';
-
-function shapeTodolist(item: TodolistAttributes) {
-  return {
-    id: item.id,
-    userId: item.userId,
-    title: item.title,
-    createdAt: new Date(item.createdAt).toISOString(),
-    updatedAt: new Date(item.updatedAt).toISOString(),
-  };
-}
+} from '../dtos/schemas.js';
+import {
+  authMiddleware,
+  createOpenAPIRouter,
+  extractBulkDeleteIds,
+} from '../middlewares/middlewares.js';
 
 const getTodolistsRoute = createRoute({
   method: 'get',

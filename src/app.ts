@@ -10,16 +10,16 @@ import { prettyJSON } from 'hono/pretty-json';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import { endTime, startTime, timing } from 'hono/timing';
-import { createAuthRoutes } from './routes/auth.routes.js';
 import {
+  createAuthRoutes,
   createOpenAPIRouter,
+  createTodoRoutes,
+  createTodolistRoutes,
   globalErrorHandler,
   globalNotFoundHandler,
   transactionMiddleware,
   type AppEnv,
-} from './routes/middlewares.js';
-import { createTodoRoutes } from './routes/todo.routes.js';
-import { createTodolistRoutes } from './routes/todolist.routes.js';
+} from './presentation/index.js';
 
 export interface CreateAppOptions {
   enableLogger?: boolean;
@@ -75,9 +75,9 @@ export function createApp(options: CreateAppOptions = {}) {
   api.doc('/openapi.json', {
     openapi: '3.0.3',
     info: {
-      title: 'Hono Pragmatic 3-Layer Todo API',
+      title: 'Hono 3-Layer Todo API',
       description:
-        'Pragmatic 3-Layer RESTful API (Routes -> Services -> DB) for Todo and Todolist management built with Hono, Zod OpenAPI, and Sequelize ORM.',
+        '3-Layer RESTful API (Presentation -> Business -> Data) for Todo and Todolist management built with Hono, Zod OpenAPI, and Sequelize ORM.',
       version: '1.0.0',
     },
     servers: [
@@ -101,7 +101,7 @@ export function createApp(options: CreateAppOptions = {}) {
           status: 'ok',
           framework: 'Hono',
           orm: 'Sequelize (SQLite)',
-          architecture: 'Pragmatic 3-Layer Architecture (Routes -> Services -> DB)',
+          architecture: '3-Layer Architecture (Presentation -> Business -> Data)',
           requestId: meta.requestId,
           capabilities: [
             'OpenAPIHono + Zod validation (@hono/zod-openapi)',

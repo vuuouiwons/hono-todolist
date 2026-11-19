@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, type AppType } from '../../src/app.js';
 import { createTodoApiClient, runRpcDemo } from '../../src/client.js';
-import { closeDb, getCurrentTransaction, getSequelize, initDb, resetDb } from '../../src/db/index.js';
+import { closeDb, getCurrentTransaction, getSequelize, initDb, resetDb } from '../../src/data/index.js';
 import {
   globalErrorHandler,
   transactionMiddleware,
   type AppEnv,
-} from '../../src/routes/middlewares.js';
-import { createTodos } from '../../src/services/todo.service.js';
-import { AppError } from '../../src/utils/errors.js';
+} from '../../src/presentation/middlewares/middlewares.js';
+import { createTodos } from '../../src/business/index.js';
+import { AppError } from '../../src/shared/errors.js';
 
 describe('Integration Tests: Hono 3-Layer Todo API (Isolated SQLite)', () => {
   let app: AppType;

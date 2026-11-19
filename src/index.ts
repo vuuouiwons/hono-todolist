@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
-import { closeDb, initDb } from './db/index.js';
+import { closeDb, initDb } from './data/index.js';
 
 async function bootstrap() {
   const port = Number(process.env.PORT ?? 8080);

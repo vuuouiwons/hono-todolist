@@ -1,21 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import {
-  DataTypes,
-  Model,
-  Sequelize,
-  type CreationOptional,
-  type ForeignKey,
-  type InferAttributes,
-  type InferCreationAttributes,
-  type Transaction,
-} from 'sequelize';
+import { DataTypes, Sequelize, type Transaction } from 'sequelize';
+import { TodoEntity } from './entities/todo.entity.js';
+import { TodolistEntity } from './entities/todolist.entity.js';
+import { UserEntity } from './entities/user.entity.js';
 
 const clsStorage = new AsyncLocalStorage<Map<string, unknown>>();
 
-// Wire Sequelize's built-in CLS hook to Node's AsyncLocalStorage so any active
-// transaction is propagated automatically to all ORM calls in the async chain.
 Sequelize.useCLS({
   run<T>(fn: (context: Map<string, unknown>) => T): T {
     const store = new Map(clsStorage.getStore());
@@ -36,44 +28,6 @@ Sequelize.useCLS({
     return ((...args: unknown[]) => clsStorage.run(store, () => fn(...args))) as T;
   },
 } as never);
-
-export class UserModel extends Model<
-  InferAttributes<UserModel>,
-  InferCreationAttributes<UserModel>
-> {
-  declare id: CreationOptional<number>;
-  declare email: string;
-  declare passwordHash: string;
-  declare createdAt: CreationOptional<Date>;
-  declare updatedAt: CreationOptional<Date>;
-}
-
-export class TodolistModel extends Model<
-  InferAttributes<TodolistModel>,
-  InferCreationAttributes<TodolistModel>
-> {
-  declare id: CreationOptional<number>;
-  declare userId: ForeignKey<UserModel['id']>;
-  declare title: string;
-  declare createdAt: CreationOptional<Date>;
-  declare updatedAt: CreationOptional<Date>;
-}
-
-export class TodoModel extends Model<
-  InferAttributes<TodoModel>,
-  InferCreationAttributes<TodoModel>
-> {
-  declare id: CreationOptional<number>;
-  declare userId: ForeignKey<UserModel['id']>;
-  declare message: string;
-  declare check: CreationOptional<boolean>;
-  declare createdAt: CreationOptional<Date>;
-  declare updatedAt: CreationOptional<Date>;
-}
-
-export type UserAttributes = InferAttributes<UserModel>;
-export type TodolistAttributes = InferAttributes<TodolistModel>;
-export type TodoAttributes = InferAttributes<TodoModel>;
 
 export interface DbOptions {
   storage?: string;
@@ -118,7 +72,7 @@ export async function initDb(options: DbOptions = {}): Promise<Sequelize> {
     logging: options.logging ? console.log : false,
   });
 
-  UserModel.init(
+  UserEntity.init(
     {
       id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
       email: { type: DataTypes.STRING(255), allowNull: false, unique: true },
@@ -129,7 +83,7 @@ export async function initDb(options: DbOptions = {}): Promise<Sequelize> {
     { sequelize, modelName: 'User', tableName: 'users', timestamps: true, underscored: true },
   );
 
-  TodolistModel.init(
+  TodolistEntity.init(
     {
       id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
       userId: { type: DataTypes.INTEGER, allowNull: false, field: 'user_id' },
@@ -147,7 +101,7 @@ export async function initDb(options: DbOptions = {}): Promise<Sequelize> {
     },
   );
 
-  TodoModel.init(
+  TodoEntity.init(
     {
       id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
       userId: { type: DataTypes.INTEGER, allowNull: false, field: 'user_id' },
@@ -166,11 +120,25 @@ export async function initDb(options: DbOptions = {}): Promise<Sequelize> {
     },
   );
 
-  UserModel.hasMany(TodolistModel, { foreignKey: 'userId', as: 'todolists', onDelete: 'CASCADE' });
-  TodolistModel.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
+  UserEntity.hasMany(TodolistEntity, {
+    foreignKey: 'userId',
+    as: 'todolists',
+    onDelete: 'CASCADE',
+  });
+  TodolistEntity.belongsTo(UserEntity, {
+    foreignKey: 'userId',
+    as: 'user',
+  });
 
-  UserModel.hasMany(TodoModel, { foreignKey: 'userId', as: 'todos', onDelete: 'CASCADE' });
-  TodoModel.belongsTo(UserModel, { foreignKey: 'userId', as: 'user' });
+  UserEntity.hasMany(TodoEntity, {
+    foreignKey: 'userId',
+    as: 'todos',
+    onDelete: 'CASCADE',
+  });
+  TodoEntity.belongsTo(UserEntity, {
+    foreignKey: 'userId',
+    as: 'user',
+  });
 
   await sequelize.authenticate();
   await sequelize.sync();

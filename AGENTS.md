@@ -1,56 +1,64 @@
-# AGENTS.md
+```
+# AGENTS.md — 3-Layer Architecture & Coding Conventions
 
-## Architecture Overview
-This repository follows a **Pragmatic 3-Layer Architecture** designed for high engineering velocity, clarity, and minimal boilerplate.
-
-**Data & Dependency Flow:**
-`Inbound Interface (HTTP / CLI / Events)` ➔ `Controllers / Handlers` ➔ `Services` ➔ `Data Access (DB / ORM)`
-
-Do NOT introduce Clean Architecture, Hexagonal Architecture, Domain-Driven Design (DDD) aggregates, or multi-layer DTO mappers unless explicitly instructed.
+## Project Overview
+This codebase strictly enforces a **3-Layer Architecture** (`Presentation` -> `Business Logic` -> `Data Access`). All generated, refactored, or reviewed code must adhere to these architectural boundaries, naming conventions, and dependency rules.
 
 ---
 
 ## Directory Structure
+Place all new files in their designated architectural layer:
+
 ```text
 src/
-├── routes/        # (or controllers/handlers) Transport layer, input validation, response shaping
-├── services/      # Core business logic, workflows, and external integrations
-├── db/            # Database connection, schema/models, and reusable complex queries
-└── utils/         # Stateless helpers (auth, formatting, logging, custom errors)
+├── presentation/       # Controllers, Routes, Middlewares, Request/Response DTOs
+├── business/           # Services, Domain Models, Business Rules, Repository Interfaces
+├── data/               # Repository Implementations, ORM Entities, Mappers, Migrations
+└── shared/             # Custom Domain Errors, Constants, Pure Utilities
 ```
 
 ---
 
-## Layer Responsibilities & Rules
-
-### 1. Routes / Controllers Layer (`src/routes/` or `src/controllers/`)
-- **Allowed:** Parse incoming requests, validate inputs (params, query, payload), enforce authentication/authorization, invoke services (or data access directly for trivial CRUD), and serialize responses.
-- **Forbidden:** Business rules, domain calculations, or multi-step orchestration.
-- **Boundary Security Rule:** Never expose raw database/ORM records directly in outbound responses if they contain sensitive or internal fields (e.g., `passwordHash`, internal tokens). Explicitly pick or shape the response payload at the controller boundary.
-
-### 2. Services Layer (`src/services/`)
-- **Allowed:** All business logic, domain rules, state mutations, database transactions, and calls to external APIs or third-party providers.
-- **Forbidden:** Importing transport/framework primitives (e.g., HTTP `Request`/`Response` objects, status codes, CLI context). Services must accept plain typed arguments and return plain data or throw domain/application errors.
-- **Flat Composition:** Avoid deep chains of services calling other services. When multiple services require shared logic, extract a stateless helper or shared internal function.
-
-### 3. Data Access Layer (`src/db/`)
-- **Allowed:** Direct use of the project's ORM, query builder, or database client.
-- **Forbidden:** Creating generic repository interfaces (`IRepository`) or pass-through wrapper classes around standard queries. Use the database client/ORM directly.
-- **Exception:** Extract a query into `src/db/queries/` only when it involves complex raw SQL or is reused across three or more distinct services.
+## Strict Architectural & Dependency Rules
+1. **Unidirectional Dependency Flow:** Dependencies must only point downward: `Presentation` -> `Business` -> `Data`. Lower layers must **never** import from upper layers.
+2. **No Layer Skipping:** Presentation components (Controllers/Handlers) must **never** call Data Access components (Repositories/ORMs) directly, even for simple CRUD lookups. Always route through a Business Service.
+3. **No Cross-Layer Model Leakage:**
+   - **Data Layer** operates on ORM/Database entities and maps them to Domain Models before returning.
+   - **Business Layer** operates exclusively on Domain Models and primitives.
+   - **Presentation Layer** accepts Request DTOs and returns Response DTOs. Never expose database entities directly in API responses.
+4. **Dependency Inversion:** Business Services must depend on Repository interfaces defined in the Business layer (e.g., `IUserRepository`), never concrete Data layer classes.
 
 ---
 
-## Pragmatic Shortcuts
-- **Trivial CRUD Bypass:** If an operation performs a straightforward single-entity read or write with zero business logic, the controller/handler MAY query the database/ORM directly rather than creating a pass-through service function.
-- **Shared Types:** Reuse schema-inferred or ORM-generated types across the `db` and `services` layers. Do not duplicate `Entity`, `DomainModel`, and `DTO` definitions for the same resource.
+## Layer-Specific Coding Conventions
+
+### 1. Presentation Layer (`src/presentation/`)
+* **Naming:** `[Entity]Controller.[ext]`, `[Entity]Routes.[ext]`, `[Action][Entity]Request.[ext]`, `[Entity]Response.[ext]`.
+* **Responsibilities:** Parse and validate incoming request payloads, invoke a single Business Service method, map the returned Domain Model to a Response DTO, and return the appropriate HTTP status code.
+* **Constraints:**
+  - Keep controller methods thin (ideally under 20 lines).
+  - **Forbidden:** Business logic, conditional domain rules, direct database/ORM calls.
+
+### 2. Business Logic Layer (`src/business/`)
+* **Naming:** `[Entity]Service.[ext]`, `[Workflow]UseCase.[ext]`, `[Entity].[ext]` (Domain Model), `I[Entity]Repository.[ext]`.
+* **Responsibilities:** Execute core business rules, calculations, multi-step workflows, and orchestrate calls across multiple repositories.
+* **Error Handling:** Throw domain-specific errors from `src/shared/errors` (e.g., `ConflictError`, `NotFoundError`, `ValidationError`). Let Presentation middleware translate these into HTTP status codes.
+* **Constraints:**
+  - **Forbidden:** HTTP-specific objects (`req`, `res`, headers, HTTP status codes) or database-specific imports (SQL queries, ORM decorators/clients).
+
+### 3. Data Access Layer (`src/data/`)
+* **Naming:** `[Entity]Repository.[ext]`, `[Entity]Entity.[ext]` (ORM model), `[Entity]Mapper.[ext]`.
+* **Responsibilities:** Encapsulate all database queries, ORM operations, caching, and external storage calls. Convert raw database records into Domain Models via Mappers before returning.
+* **Constraints:**
+  - **Forbidden:** Business validation or domain decision-making (e.g., checking user permissions or account eligibility inside SQL/ORM queries).
 
 ---
 
-## Coding & Testing Conventions
-- **Dependencies:** Prefer explicit, direct module imports over Dependency Injection (DI) containers, reflection, or heavy decorator frameworks.
-- **Database Integrity:** Enforce data invariants at the database level using foreign keys, unique constraints, `NOT NULL` rules, and ACID transactions rather than duplicating defensive checks in application code.
-- **Testing Strategy:** Favor fast integration tests against an isolated test database for endpoints and queries. Reserve unit tests for pure, logic-heavy service functions and edge cases.
-- **Feature Scope:** Implementing a standard feature should require changes in at most three places:
-  1. `src/db/` (schema or migration, if needed)
-  2. `src/services/` (business logic, if non-trivial)
-  3. `src/routes/` (endpoint, input validation, and safe response shaping)
+## Agent Workflow & Verification Checklist
+Before finalizing any code changes, verify the following:
+- [ ] Are imports strictly flowing downward (`presentation` -> `business` -> `data`)?
+- [ ] Are all database queries isolated inside `src/data/`?
+- [ ] Are all HTTP status codes and `req`/`res` objects isolated inside `src/presentation/`?
+- [ ] Are DTOs used at API boundaries instead of raw database entities?
+- [ ] Do new Services inject Repository interfaces rather than concrete classes?
+```

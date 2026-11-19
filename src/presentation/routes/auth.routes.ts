@@ -1,22 +1,13 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { UserAttributes } from '../db/index.js';
-import { loginUser, registerUser } from '../services/auth.service.js';
-import { createOpenAPIRouter } from './middlewares.js';
+import { authService, type UserModel } from '../../business/index.js';
+import { shapeUser } from '../controllers/auth.controller.js';
 import {
   AuthRequestSchema,
   ErrorResponseSchema,
   LoginResponseSchema,
   RegisterResponseSchema,
-} from './schemas.js';
-
-// Controller boundary shaper: explicitly strips sensitive fields like passwordHash
-function shapeUser(user: UserAttributes) {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: new Date(user.createdAt).toISOString(),
-  };
-}
+} from '../dtos/schemas.js';
+import { createOpenAPIRouter } from '../middlewares/middlewares.js';
 
 const registerRoute = createRoute({
   method: 'post',
@@ -78,7 +69,7 @@ export function createAuthRoutes() {
   return createOpenAPIRouter()
     .openapi(registerRoute, async (c) => {
       const body = c.req.valid('json');
-      const user = await registerUser(body);
+      const user = await authService.registerUser(body);
       return c.json(
         {
           message: 'User registered successfully',
@@ -89,7 +80,7 @@ export function createAuthRoutes() {
     })
     .openapi(loginRoute, async (c) => {
       const body = c.req.valid('json');
-      const result = await loginUser(body);
+      const result = await authService.loginUser(body);
       return c.json(
         {
           message: 'Login successful',

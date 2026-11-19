@@ -1,5 +1,4 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { TodoAttributes } from '../db/index.js';
 import {
   createTodos,
   deleteTodoById,
@@ -7,8 +6,8 @@ import {
   getTodoById,
   listTodos,
   updateTodos,
-} from '../services/todo.service.js';
-import { authMiddleware, createOpenAPIRouter, extractBulkDeleteIds } from './middlewares.js';
+} from '../../business/index.js';
+import { shapeTodo } from '../controllers/todo.controller.js';
 import {
   BulkDeleteBodySchema,
   BulkDeleteResponseSchema,
@@ -23,18 +22,12 @@ import {
   TodoMutationResponseSchema,
   TodoQuerySchema,
   UpdateTodoBodySchema,
-} from './schemas.js';
-
-function shapeTodo(item: TodoAttributes) {
-  return {
-    id: item.id,
-    userId: item.userId,
-    message: item.message,
-    check: Boolean(item.check),
-    createdAt: new Date(item.createdAt).toISOString(),
-    updatedAt: new Date(item.updatedAt).toISOString(),
-  };
-}
+} from '../dtos/schemas.js';
+import {
+  authMiddleware,
+  createOpenAPIRouter,
+  extractBulkDeleteIds,
+} from '../middlewares/middlewares.js';
 
 const getTodosRoute = createRoute({
   method: 'get',

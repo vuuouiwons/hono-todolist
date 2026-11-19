@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { UnauthorizedError, ValidationError, formatZodIssues } from '../../src/utils/errors.js';
-import { hashPassword, signToken, verifyPassword, verifyToken } from '../../src/utils/auth.js';
-import { createPagination } from '../../src/utils/pagination.js';
 import {
   createTodos,
   deleteTodos,
   listTodos,
   updateTodos,
-} from '../../src/services/todo.service.js';
+} from '../../src/business/index.js';
 import {
   createTodolists,
   deleteTodolists,
   listTodolists,
   updateTodolists,
-} from '../../src/services/todolist.service.js';
+} from '../../src/business/index.js';
+import { hashPassword, signToken, verifyPassword, verifyToken } from '../../src/shared/auth.js';
+import { UnauthorizedError, ValidationError, formatZodIssues } from '../../src/shared/errors.js';
+import { createPagination } from '../../src/shared/pagination.js';
 
 describe('Unit Tests: Stateless Utils & Service Validation', () => {
   it('computes pagination metadata accurately for empty, first, middle, and last pages', () => {

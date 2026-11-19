@@ -7,10 +7,10 @@ import type { TimingVariables } from 'hono/timing';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Transaction } from 'sequelize';
 import { ZodError } from 'zod';
-import { withTransaction } from '../db/index.js';
-import { verifyToken } from '../utils/auth.js';
-import { AppError, UnauthorizedError, formatZodIssues } from '../utils/errors.js';
-import type { BulkDeleteBodySchema } from './schemas.js';
+import { withTransaction } from '../../data/database.js';
+import { verifyToken } from '../../shared/auth.js';
+import { AppError, UnauthorizedError, formatZodIssues } from '../../shared/errors.js';
+import type { BulkDeleteBodySchema } from '../dtos/schemas.js';
 
 export type AppVariables = RequestIdVariables &
   TimingVariables & {
@@ -100,18 +100,13 @@ export const globalErrorHandler: ErrorHandler<AppEnv> = (err, c) => {
   }
 
   if (err instanceof HTTPException) {
-    const status = err.status as ContentfulStatusCode;
-    return c.json({ error: err.message || 'HTTP Error' }, status);
+    return c.json({ error: err.message }, err.status);
   }
 
-  if (err instanceof SyntaxError) {
-    return c.json({ error: 'Invalid JSON request body' }, 400);
-  }
-
-  console.error('[UnhandledError]', err);
-  return c.json({ error: 'Internal server error' }, 500);
+  const message = err instanceof Error ? err.message : 'Internal Server Error';
+  return c.json({ error: message }, 500);
 };
 
 export const globalNotFoundHandler: NotFoundHandler<AppEnv> = (c) => {
-  return c.json({ error: `Route ${c.req.method} ${c.req.path} not found` }, 404);
+  return c.json({ error: `Not Found: ${c.req.method} ${c.req.path}` }, 404);
 };
